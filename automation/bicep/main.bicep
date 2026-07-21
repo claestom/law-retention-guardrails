@@ -45,6 +45,9 @@ param timeZone string = 'UTC'
 @description('Log Analytics Contributor role definition id.')
 param logAnalyticsContributorRoleId string = '92aaf0da-9dab-42b6-94a3-d43ce8d16293'
 
+@description('Create the Log Analytics Contributor role assignment on the target resource group. Set false to grant at subscription or management group scope instead, using roleAssignment.subscription.bicep / roleAssignment.managementGroup.bicep.')
+param createRgRoleAssignment bool = true
+
 resource aa 'Microsoft.Automation/automationAccounts@2023-11-01' = {
   name: automationAccountName
   location: location
@@ -140,7 +143,9 @@ resource jobSchedule 'Microsoft.Automation/automationAccounts/jobSchedules@2023-
 }
 
 // Grant the managed identity Log Analytics Contributor on the target RG (may differ from this RG).
-module roleAssignment 'roleAssignment.bicep' = {
+// For subscription / management group scope, set createRgRoleAssignment = false and deploy
+// roleAssignment.subscription.bicep or roleAssignment.managementGroup.bicep separately.
+module roleAssignment 'roleAssignment.bicep' = if (createRgRoleAssignment) {
   name: 'law-retention-role'
   scope: resourceGroup(targetResourceGroupName)
   params: {

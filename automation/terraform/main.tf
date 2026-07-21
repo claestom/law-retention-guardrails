@@ -96,9 +96,17 @@ resource "azurerm_automation_job_schedule" "weekly" {
   schedule_name           = azurerm_automation_schedule.weekly.name
 }
 
-# ---- RBAC: Log Analytics Contributor on the target RG -----------------------
+# ---- RBAC: Log Analytics Contributor at the chosen scope ---------------------
+locals {
+  role_assignment_scope_id = (
+    var.role_assignment_scope == "subscription" ? "/subscriptions/${var.subscription_id}" :
+    var.role_assignment_scope == "management_group" ? "/providers/Microsoft.Management/managementGroups/${var.management_group_name}" :
+    data.azurerm_resource_group.target.id
+  )
+}
+
 resource "azurerm_role_assignment" "law_contributor" {
-  scope                = data.azurerm_resource_group.target.id
+  scope                = local.role_assignment_scope_id
   role_definition_name = "Log Analytics Contributor"
   principal_id         = azurerm_automation_account.this.identity[0].principal_id
 }

@@ -68,6 +68,20 @@ terraform init; terraform apply
 
 Both create an Automation Account (managed identity), the runbook, a weekly schedule, and the **Log Analytics Contributor** role on the target RG.
 
+### RBAC scope (where the identity gets Log Analytics Contributor)
+
+Default is the **target resource group**. To cover more workspaces, widen the scope:
+
+- **Terraform** — set `role_assignment_scope = "resource_group" | "subscription" | "management_group"` (plus `management_group_name` for the last). One `terraform apply` handles it.
+- **Bicep** — an RG deployment can't assign at a higher scope, so for subscription/MG set `createRgRoleAssignment=false` on `main.bicep`, then deploy the matching template with the identity's principal id (from the main deploy output):
+  ```powershell
+  # subscription scope
+  az deployment sub create -l <location> -f automation/bicep/roleAssignment.subscription.bicep -p principalId=<principalId>
+  # management group scope
+  az deployment mg create -m <mgId> -l <location> -f automation/bicep/roleAssignment.managementGroup.bicep -p principalId=<principalId>
+  ```
+  Broader scope also means the runbook can act on more workspaces — set `law-retention-resource-group` accordingly (and prefer least privilege).
+
 ## Change settings later (no redeploy)
 
 Portal → Automation Account → **Shared Resources → Variables**, edit and save:

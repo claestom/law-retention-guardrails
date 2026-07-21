@@ -59,3 +59,19 @@ variable "workspace_name_filter" {
   default     = ""
   description = "Optional single workspace name to target. Empty = all workspaces in the RG."
 }
+
+variable "role_assignment_scope" {
+  type        = string
+  default     = "resource_group"
+  description = "Scope for the Log Analytics Contributor role: resource_group | subscription | management_group."
+  validation {
+    condition     = contains(["resource_group", "subscription", "management_group"], var.role_assignment_scope)
+    error_message = "role_assignment_scope must be resource_group, subscription, or management_group."
+  }
+}
+
+variable "management_group_name" {
+  type        = string
+  default     = ""
+  description = "Management group name/id — required only when role_assignment_scope = management_group."
+}
