@@ -50,8 +50,12 @@
 
 [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Medium')]
 param(
-    [Parameter(Mandatory)]
+    [ValidateSet('ResourceGroup', 'Subscription', 'ManagementGroup')]
+    [string] $Scope = 'ResourceGroup',
+
     [string] $ResourceGroupName,
+
+    [string] $ManagementGroupName,
 
     [int] $RetentionInDays = -1,
 
@@ -76,19 +80,9 @@ if ($SubscriptionId) {
     }
 }
 Write-Host ("Subscription : {0} ({1})" -f (Get-AzContext).Subscription.Name, (Get-AzContext).Subscription.Id) -ForegroundColor Cyan
-Write-Host ("Resource group : {0}" -f $ResourceGroupName) -ForegroundColor Cyan
+Write-Host ("Scope        : {0}" -f $Scope) -ForegroundColor Cyan
 Write-Host ("Target retention : analytics={0}  total={1}  (-1 = same as workspace)" -f $RetentionInDays, $TotalRetentionInDays) -ForegroundColor Cyan
 Write-Host ""
-
-# ---- Discover workspaces ---------------------------------------------------
-$workspaces = Get-AzOperationalInsightsWorkspace -ResourceGroupName $ResourceGroupName
-if ($WorkspaceName) {
-    $workspaces = $workspaces | Where-Object { $_.Name -eq $WorkspaceName }
-}
-if (-not $workspaces) {
-    Write-Warning "No Log Analytics workspaces found in resource group '$ResourceGroupName'."
-    return
-}
 
 # ---- Helpers ---------------------------------------------------------------
 # A table already matches the desired analytics retention when:
@@ -100,11 +94,48 @@ function Test-RetentionMatch {
     return ($current -eq $desired)
 }
 
-$results = [System.Collections.Generic.List[object]]::new()
+# Enumerate workspaces across subscriptions via Azure Resource Graph (needs Az.ResourceGraph).
+function Get-GraphWorkspaces {
+    param([string] $ManagementGroup)
+    $q = "resources | where type =~ 'microsoft.operationalinsights/workspaces' | project name, resourceGroup, subscriptionId"
+    $out = @(); $skip = 0
+    do {
+        $p = @{ Query = $q; First = 1000; Skip = $skip }
+        if ($ManagementGroup) { $p['ManagementGroup'] = $ManagementGroup }
+        $page = Search-AzGraph @p
+        foreach ($r in $page) { $out += [pscustomobject]@{ SubscriptionId = $r.subscriptionId; ResourceGroupName = $r.resourceGroup; Name = $r.name } }
+        $skip += $page.Count
+    } while ($page.Count -eq 1000)
+    return $out
+}
 
-foreach ($ws in $workspaces) {
-    Write-Host ("=== Workspace: {0} ===" -f $ws.Name) -ForegroundColor Green
-    $tables = Get-AzOperationalInsightsTable -ResourceGroupName $ResourceGroupName -WorkspaceName $ws.Name
+# ---- Discover workspaces in scope ------------------------------------------
+switch ($Scope) {
+    'ResourceGroup' {
+        if (-not $ResourceGroupName) { throw "Scope 'ResourceGroup' requires -ResourceGroupName." }
+        $targets = Get-AzOperationalInsightsWorkspace -ResourceGroupName $ResourceGroupName | ForEach-Object {
+            [pscustomobject]@{ SubscriptionId = (Get-AzContext).Subscription.Id; ResourceGroupName = $_.ResourceGroupName; Name = $_.Name }
+        }
+    }
+    'Subscription' { $targets = Get-GraphWorkspaces }
+    'ManagementGroup' {
+        if (-not $ManagementGroupName) { throw "Scope 'ManagementGroup' requires -ManagementGroupName." }
+        $targets = Get-GraphWorkspaces -ManagementGroup $ManagementGroupName
+    }
+}
+if ($WorkspaceName) { $targets = $targets | Where-Object { $_.Name -eq $WorkspaceName } }
+if (-not $targets) { Write-Warning "No Log Analytics workspaces found for scope '$Scope'."; return }
+
+$results = [System.Collections.Generic.List[object]]::new()
+$currentSub = (Get-AzContext).Subscription.Id
+
+foreach ($ws in $targets) {
+    if ($ws.SubscriptionId -and $ws.SubscriptionId -ne $currentSub) {
+        Set-AzContext -Subscription $ws.SubscriptionId | Out-Null
+        $currentSub = $ws.SubscriptionId
+    }
+    Write-Host ("=== [{0}] {1}/{2} ===" -f $ws.SubscriptionId, $ws.ResourceGroupName, $ws.Name) -ForegroundColor Green
+    $tables = Get-AzOperationalInsightsTable -ResourceGroupName $ws.ResourceGroupName -WorkspaceName $ws.Name
 
     foreach ($table in $tables) {
         $name = $table.Name
@@ -120,7 +151,7 @@ foreach ($ws in $workspaces) {
         if ($PSCmdlet.ShouldProcess("$($ws.Name)/$name", "Set retention analytics=$RetentionInDays total=$TotalRetentionInDays")) {
             try {
                 $params = @{
-                    ResourceGroupName    = $ResourceGroupName
+                    ResourceGroupName    = $ws.ResourceGroupName
                     WorkspaceName        = $ws.Name
                     TableName            = $name
                     RetentionInDays      = $RetentionInDays

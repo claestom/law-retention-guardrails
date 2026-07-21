@@ -49,6 +49,20 @@ resource "azurerm_automation_variable_string" "workspace" {
   value                   = var.workspace_name_filter
 }
 
+resource "azurerm_automation_variable_string" "scope_mode" {
+  name                    = "law-retention-scope-mode"
+  resource_group_name     = data.azurerm_resource_group.automation.name
+  automation_account_name = azurerm_automation_account.this.name
+  value                   = var.scope_mode
+}
+
+resource "azurerm_automation_variable_string" "management_group" {
+  name                    = "law-retention-management-group"
+  resource_group_name     = data.azurerm_resource_group.automation.name
+  automation_account_name = azurerm_automation_account.this.name
+  value                   = var.scope_management_group
+}
+
 resource "azurerm_automation_variable_int" "analytics_days" {
   name                    = "law-retention-analytics-days"
   resource_group_name     = data.azurerm_resource_group.automation.name

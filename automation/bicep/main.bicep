@@ -18,6 +18,17 @@ param location string = resourceGroup().location
 @description('Resource group that contains the Log Analytics workspaces to configure.')
 param targetResourceGroupName string = resourceGroup().name
 
+@description('Runbook scope: which workspaces it configures. ResourceGroup uses targetResourceGroupName; Subscription = all workspaces in the current subscription; ManagementGroup = all workspaces under managementGroupName.')
+@allowed([
+  'ResourceGroup'
+  'Subscription'
+  'ManagementGroup'
+])
+param scopeMode string = 'ResourceGroup'
+
+@description('Management group id/name (only used when scopeMode = ManagementGroup).')
+param managementGroupName string = ''
+
 @description('Analytics (interactive) retention in days. -1 = same as workspace.')
 param analyticsRetentionInDays int = -1
 
@@ -81,6 +92,24 @@ resource vRg 'Microsoft.Automation/automationAccounts/variables@2023-11-01' = {
   properties: {
     isEncrypted: false
     value: '"${targetResourceGroupName}"'
+  }
+}
+
+resource vScopeMode 'Microsoft.Automation/automationAccounts/variables@2023-11-01' = {
+  parent: aa
+  name: 'law-retention-scope-mode'
+  properties: {
+    isEncrypted: false
+    value: '"${scopeMode}"'
+  }
+}
+
+resource vManagementGroup 'Microsoft.Automation/automationAccounts/variables@2023-11-01' = {
+  parent: aa
+  name: 'law-retention-management-group'
+  properties: {
+    isEncrypted: false
+    value: '"${managementGroupName}"'
   }
 }
 

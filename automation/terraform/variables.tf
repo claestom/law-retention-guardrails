@@ -57,7 +57,23 @@ variable "total_retention_in_days" {
 variable "workspace_name_filter" {
   type        = string
   default     = ""
-  description = "Optional single workspace name to target. Empty = all workspaces in the RG."
+  description = "Optional single workspace name to target. Empty = all workspaces in scope."
+}
+
+variable "scope_mode" {
+  type        = string
+  default     = "ResourceGroup"
+  description = "Runbook scope: ResourceGroup | Subscription | ManagementGroup."
+  validation {
+    condition     = contains(["ResourceGroup", "Subscription", "ManagementGroup"], var.scope_mode)
+    error_message = "scope_mode must be ResourceGroup, Subscription, or ManagementGroup."
+  }
+}
+
+variable "scope_management_group" {
+  type        = string
+  default     = ""
+  description = "Management group id/name for the runbook to enumerate (only used when scope_mode = ManagementGroup)."
 }
 
 variable "role_assignment_scope" {
