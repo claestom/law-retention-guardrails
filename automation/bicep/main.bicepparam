@@ -6,6 +6,15 @@ param analyticsRetentionInDays = -1
 param totalRetentionInDays = 730
 param workspaceNameFilter = ''
 
+// Scope of workspaces the runbook configures:
+//   ResourceGroup (default) | Subscription | ManagementGroup
+param scopeMode = 'ResourceGroup'
+// Only used when scopeMode = 'ManagementGroup'
+param managementGroupName = ''
+// Set false for Subscription/ManagementGroup scope, then grant the identity
+// via roleAssignment.subscription.bicep / roleAssignment.managementGroup.bicep
+param createRgRoleAssignment = true
+
 // Leave empty to create an EMPTY runbook, then upload content after deployment
 // (see the az/PowerShell commands in the deploy notes). Set a raw Git/SAS blob URL
 // only if the .ps1 is reachable at deploy time.
