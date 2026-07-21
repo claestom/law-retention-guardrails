@@ -2,6 +2,13 @@
 
 Govern **Log Analytics data retention** — at the **workspace** level and per **table** — with Azure Policy for visibility and a script/runbook for configuration.
 
+## Prerequisites
+
+- Azure CLI + `Az.Accounts`, `Az.OperationalInsights` (also imported into the Automation Account for the runbook).
+- **Log Analytics Contributor** on the target scope.
+
+> Sample values in `deploy.ps1` / `*.bicepparam` / `*.tfvars.example` reference a lab subscription — change them to your own.
+
 ## Pick your path
 
 | I want to… | Use |
@@ -71,10 +78,3 @@ Portal → Automation Account → **Shared Resources → Variables**, edit and s
 | `law-retention-total-days` | total retention (e.g. `730`) |
 
 Changes apply on the next run. Run now: **Runbooks → `Invoke-LawTableRetention` → Start** (pass `PREVIEWONLY = true` for a dry run).
-
-## Prerequisites
-
-- Azure CLI + `Az.Accounts`, `Az.OperationalInsights` (also imported into the Automation Account for the runbook).
-- **Log Analytics Contributor** on the target scope.
-
-> Sample values in `deploy.ps1` / `*.bicepparam` / `*.tfvars.example` reference a lab subscription — change them to your own.
