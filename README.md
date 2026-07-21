@@ -2,12 +2,19 @@
 
 Govern **Log Analytics data retention** — at the **workspace** level and per **table** — with Azure Policy for visibility and a script/runbook for configuration.
 
+> ⚠️ **Configure these files first — they ship with the author's lab values.** Subscription IDs, resource-group names, workspace names and the runbook URL in the files below all point at a demo environment. **Replace every placeholder with your own values before deploying**, or the commands will target the wrong (or a non-existent) tenant.
+>
+> | File | Change |
+> |---|---|
+> | `deploy.ps1` | `-SubscriptionId` you pass in / the guardrail sub id inside the script |
+> | `automation/bicep/main.bicepparam` | `targetResourceGroupName`, `automationAccountName`, `runbookContentUri` (your repo's raw URL) |
+> | `automation/terraform/terraform.tfvars.example` → copy to `terraform.tfvars` | `subscription_id`, `automation_resource_group_name`, `target_resource_group_name`, `schedule_start_time` |
+> | command args | every `<sub-id>`, `<rg>`, `<automation-rg>`, `<mgId>`, `<location>`, `<principalId>` placeholder |
+
 ## Prerequisites
 
 - Azure CLI + `Az.Accounts`, `Az.OperationalInsights` (also imported into the Automation Account for the runbook).
 - **Log Analytics Contributor** on the target scope.
-
-> Sample values in `deploy.ps1` / `*.bicepparam` / `*.tfvars.example` reference a lab subscription — change them to your own.
 
 ## Pick your path
 
