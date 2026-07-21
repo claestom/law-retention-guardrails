@@ -16,5 +16,8 @@ scope_mode              = "ResourceGroup"
 # Only used when scope_mode = "ManagementGroup"
 scope_management_group  = ""
 management_group_name   = ""
+# Only used when scope_mode = "Subscription" to target a DIFFERENT subscription than the
+# Automation Account's own. Empty = the identity's home subscription.
+scope_subscription_id   = ""
 # Where to grant the managed identity: resource_group | subscription | management_group
 role_assignment_scope   = "resource_group"

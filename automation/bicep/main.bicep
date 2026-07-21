@@ -29,6 +29,9 @@ param scopeMode string = 'ResourceGroup'
 @description('Management group id/name (only used when scopeMode = ManagementGroup).')
 param managementGroupName string = ''
 
+@description('Optional subscription id to target when scopeMode = Subscription. Empty = the Automation Account\'s own subscription (the managed identity\'s home sub).')
+param subscriptionId string = ''
+
 @description('Analytics (interactive) retention in days. -1 = same as workspace.')
 param analyticsRetentionInDays int = -1
 
@@ -110,6 +113,15 @@ resource vManagementGroup 'Microsoft.Automation/automationAccounts/variables@202
   properties: {
     isEncrypted: false
     value: '"${managementGroupName}"'
+  }
+}
+
+resource vSubscription 'Microsoft.Automation/automationAccounts/variables@2023-11-01' = {
+  parent: aa
+  name: 'law-retention-subscription'
+  properties: {
+    isEncrypted: false
+    value: '"${subscriptionId}"'
   }
 }
 

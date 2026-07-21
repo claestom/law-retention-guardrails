@@ -18,6 +18,9 @@
       - law-retention-scope-mode      (string: ResourceGroup | Subscription | ManagementGroup)
       - law-retention-resource-group  (string, used when scope = ResourceGroup)
       - law-retention-management-group (string, used when scope = ManagementGroup)
+      - law-retention-subscription    (string, optional; used when scope = Subscription to
+                                       target a subscription OTHER than the identity's home
+                                       one. Empty = the Automation Account's own subscription)
       - law-retention-workspace       (string, empty = all workspaces in scope)
       - law-retention-analytics-days  (int, -1 = same as workspace)
       - law-retention-total-days      (int, e.g. 730; -1 = same as workspace)
@@ -35,6 +38,7 @@ param(
     [string] $Scope,                 # ResourceGroup | Subscription | ManagementGroup
     [string] $ResourceGroupName,
     [string] $ManagementGroupName,
+    [string] $SubscriptionId,        # optional; Subscription scope target (empty = home sub)
     [string] $WorkspaceName,
     [string] $RetentionInDays,
     [string] $TotalRetentionInDays,
@@ -63,6 +67,7 @@ $wsName = Resolve-Config -ParamValue $WorkspaceName        -VariableName 'law-re
 $ret    = [int](Resolve-Config -ParamValue $RetentionInDays      -VariableName 'law-retention-analytics-days')
 $total  = [int](Resolve-Config -ParamValue $TotalRetentionInDays -VariableName 'law-retention-total-days')
 $mgName = Resolve-Config -ParamValue $ManagementGroupName  -VariableName 'law-retention-management-group' -Optional
+$subId  = Resolve-Config -ParamValue $SubscriptionId       -VariableName 'law-retention-subscription' -Optional
 $scopeMode = Resolve-Config -ParamValue $Scope            -VariableName 'law-retention-scope-mode' -Optional
 if ([string]::IsNullOrWhiteSpace($scopeMode)) { $scopeMode = 'ResourceGroup' }
 $whatIf = ($PreviewOnly -eq 'true')
@@ -79,14 +84,16 @@ function Test-RetentionMatch {
     return ($current -eq $desired)
 }
 
-# Enumerate workspaces (across subscriptions) via Azure Resource Graph.
+# Enumerate workspaces via Azure Resource Graph, scoped to a management group,
+# a single subscription, or (if neither) every subscription the identity can see.
 function Get-GraphWorkspaces {
-    param([string] $ManagementGroup)
+    param([string] $ManagementGroup, [string] $Subscription)
     $q = "resources | where type =~ 'microsoft.operationalinsights/workspaces' | project name, resourceGroup, subscriptionId"
     $out = @(); $skip = 0
     do {
         $p = @{ Query = $q; First = 1000; Skip = $skip }
         if ($ManagementGroup) { $p['ManagementGroup'] = $ManagementGroup }
+        elseif ($Subscription) { $p['Subscription'] = @($Subscription) }
         $page = Search-AzGraph @p
         foreach ($r in $page) {
             $out += [pscustomobject]@{ SubscriptionId = $r.subscriptionId; ResourceGroupName = $r.resourceGroup; Name = $r.name }
@@ -103,7 +110,12 @@ switch ($scopeMode) {
             [pscustomobject]@{ SubscriptionId = (Get-AzContext).Subscription.Id; ResourceGroupName = $_.ResourceGroupName; Name = $_.Name }
         }
     }
-    'Subscription' { $targets = Get-GraphWorkspaces }
+    'Subscription' {
+        $targetSub = [string]::IsNullOrWhiteSpace($subId) ? (Get-AzContext).Subscription.Id : $subId
+        if ((Get-AzContext).Subscription.Id -ne $targetSub) { Set-AzContext -Subscription $targetSub | Out-Null }
+        Write-Output "Subscription     : $targetSub"
+        $targets = Get-GraphWorkspaces -Subscription $targetSub
+    }
     'ManagementGroup' {
         if ([string]::IsNullOrWhiteSpace($mgName)) { throw "Scope 'ManagementGroup' requires law-retention-management-group." }
         $targets = Get-GraphWorkspaces -ManagementGroup $mgName

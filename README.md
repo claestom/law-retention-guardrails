@@ -96,10 +96,12 @@ RBAC alone doesn't widen *what the runbook touches* — set the **scope mode** t
 | `scope_mode` (TF) / `scopeMode` (Bicep) | Runbook enumerates |
 |---|---|
 | `ResourceGroup` (default) | workspaces in `law-retention-resource-group` |
-| `Subscription` | every workspace in the subscription |
+| `Subscription` | every workspace in **one** subscription — the Automation Account's own by default, or `law-retention-subscription` if set |
 | `ManagementGroup` | every workspace under `law-retention-management-group` (all child subscriptions) |
 
-At **deploy time** you pass this as a parameter; it's stored as the `law-retention-scope-mode` (and `law-retention-management-group`) Automation Variables, so you can change it later without redeploying.
+At **deploy time** you pass this as a parameter; it's stored as the `law-retention-scope-mode` (and `law-retention-management-group` / `law-retention-subscription`) Automation Variables, so you can change it later without redeploying.
+
+> **Subscription scope** targets the managed identity's home subscription (where the Automation Account lives). Set `subscriptionId` (Bicep) / `scope_subscription_id` (TF) only to target a *different* subscription — the identity must then have Log Analytics Contributor there too.
 
 > For `Subscription` / `ManagementGroup` scope the runbook uses **Azure Resource Graph** — import the **`Az.ResourceGraph`** module into the Automation Account (alongside `Az.Accounts` and `Az.OperationalInsights`).
 
@@ -112,6 +114,7 @@ Portal → Automation Account → **Shared Resources → Variables**, edit and s
 | `law-retention-scope-mode` | `ResourceGroup` \| `Subscription` \| `ManagementGroup` |
 | `law-retention-resource-group` | RG containing the workspaces (scope = ResourceGroup) |
 | `law-retention-management-group` | management group id (scope = ManagementGroup) |
+| `law-retention-subscription` | subscription id (scope = Subscription; empty = identity's home sub) |
 | `law-retention-workspace` | one workspace name, or empty = all in scope |
 | `law-retention-analytics-days` | analytics retention (`-1` = inherit workspace) |
 | `law-retention-total-days` | total retention (e.g. `730`) |

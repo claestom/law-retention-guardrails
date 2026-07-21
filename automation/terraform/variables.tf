@@ -76,6 +76,12 @@ variable "scope_management_group" {
   description = "Management group id/name for the runbook to enumerate (only used when scope_mode = ManagementGroup)."
 }
 
+variable "scope_subscription_id" {
+  type        = string
+  default     = ""
+  description = "Subscription id the runbook enumerates when scope_mode = Subscription. Empty = the Automation Account's own subscription (the managed identity's home sub)."
+}
+
 variable "role_assignment_scope" {
   type        = string
   default     = "resource_group"

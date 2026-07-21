@@ -11,6 +11,9 @@ param workspaceNameFilter = ''
 param scopeMode = 'ResourceGroup'
 // Only used when scopeMode = 'ManagementGroup'
 param managementGroupName = ''
+// Only used when scopeMode = 'Subscription' to target a DIFFERENT subscription than
+// the Automation Account's own. Empty = the identity's home subscription.
+param subscriptionId = ''
 // Set false for Subscription/ManagementGroup scope, then grant the identity
 // via roleAssignment.subscription.bicep / roleAssignment.managementGroup.bicep
 param createRgRoleAssignment = true

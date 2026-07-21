@@ -34,7 +34,9 @@
     Optional. Restrict to a single workspace in the resource group.
 
 .PARAMETER SubscriptionId
-    Optional. Sets the Az context to this subscription before running.
+    Optional. Sets the Az context to this subscription before running. For
+    Subscription scope this also selects which subscription's workspaces are
+    enumerated; omit to use the current context subscription.
 
 .EXAMPLE
     ./Set-LawTableRetention.ps1 -ResourceGroupName rg-azure-monitor-lab -WhatIf
@@ -96,12 +98,13 @@ function Test-RetentionMatch {
 
 # Enumerate workspaces across subscriptions via Azure Resource Graph (needs Az.ResourceGraph).
 function Get-GraphWorkspaces {
-    param([string] $ManagementGroup)
+    param([string] $ManagementGroup, [string] $Subscription)
     $q = "resources | where type =~ 'microsoft.operationalinsights/workspaces' | project name, resourceGroup, subscriptionId"
     $out = @(); $skip = 0
     do {
         $p = @{ Query = $q; First = 1000; Skip = $skip }
         if ($ManagementGroup) { $p['ManagementGroup'] = $ManagementGroup }
+        elseif ($Subscription) { $p['Subscription'] = @($Subscription) }
         $page = Search-AzGraph @p
         foreach ($r in $page) { $out += [pscustomobject]@{ SubscriptionId = $r.subscriptionId; ResourceGroupName = $r.resourceGroup; Name = $r.name } }
         $skip += $page.Count
@@ -117,7 +120,7 @@ switch ($Scope) {
             [pscustomobject]@{ SubscriptionId = (Get-AzContext).Subscription.Id; ResourceGroupName = $_.ResourceGroupName; Name = $_.Name }
         }
     }
-    'Subscription' { $targets = Get-GraphWorkspaces }
+    'Subscription' { $targets = Get-GraphWorkspaces -Subscription (Get-AzContext).Subscription.Id }
     'ManagementGroup' {
         if (-not $ManagementGroupName) { throw "Scope 'ManagementGroup' requires -ManagementGroupName." }
         $targets = Get-GraphWorkspaces -ManagementGroup $ManagementGroupName

@@ -63,6 +63,13 @@ resource "azurerm_automation_variable_string" "management_group" {
   value                   = var.scope_management_group
 }
 
+resource "azurerm_automation_variable_string" "subscription" {
+  name                    = "law-retention-subscription"
+  resource_group_name     = data.azurerm_resource_group.automation.name
+  automation_account_name = azurerm_automation_account.this.name
+  value                   = var.scope_subscription_id
+}
+
 resource "azurerm_automation_variable_int" "analytics_days" {
   name                    = "law-retention-analytics-days"
   resource_group_name     = data.azurerm_resource_group.automation.name
