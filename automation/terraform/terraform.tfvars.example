@@ -1,0 +1,11 @@
+subscription_id                = "794194cd-a4b7-4024-970c-9533c4babff0"
+automation_resource_group_name = "rg-automation"
+target_resource_group_name     = "rg-azure-monitor-lab"
+automation_account_name        = "aa-law-retention"
+
+# Must be >5 minutes in the future (RFC3339, UTC shown here).
+schedule_start_time = "2026-07-22T03:00:00Z"
+
+analytics_retention_in_days = -1
+total_retention_in_days     = 730
+workspace_name_filter       = ""

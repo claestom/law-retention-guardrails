@@ -1,0 +1,98 @@
+{
+  "name": "c6f0e4e3-3d45-4e9c-bf70-5b8c9d0e1f23",
+  "type": "Microsoft.Authorization/policySetDefinitions",
+  "properties": {
+    "displayName": "Configure Log Analytics data retention (workspace and table level)",
+    "policyType": "Custom",
+    "description": "Initiative that governs data retention for Log Analytics workspaces at both the workspace level (default analytics retention) and the individual table level (analytics retention and total retention). Each member policy supports an Audit, Deny, or DeployIfNotExists effect. Table settings default to -1 ('Same as workspace settings') and the workspace setting defaults to 30 days (the minimum).",
+    "metadata": {
+      "category": "Monitoring",
+      "version": "1.1.0",
+      "source": "https://learn.microsoft.com/azure/azure-monitor/logs/data-retention-configure"
+    },
+    "parameters": {
+      "effect": {
+        "type": "String",
+        "metadata": {
+          "displayName": "Effect",
+          "description": "The effect applied by both member policies. Audit reports non-matching retention, Deny blocks writes that would set a non-matching retention, and DeployIfNotExists remediates the retention."
+        },
+        "allowedValues": [
+          "Audit",
+          "Deny",
+          "DeployIfNotExists"
+        ],
+        "defaultValue": "DeployIfNotExists"
+      },
+      "workspaceRetentionInDays": {
+        "type": "Integer",
+        "metadata": {
+          "displayName": "Workspace retention (days)",
+          "description": "Workspace-level analytics data retention in days. Allowed range is 30-730. Defaults to 30 (the minimum)."
+        },
+        "defaultValue": 30
+      },
+      "tableRetentionInDays": {
+        "type": "Integer",
+        "metadata": {
+          "displayName": "Table analytics retention (days)",
+          "description": "Analytics (interactive) retention in days for each table. Use -1 for 'Same as workspace settings'. Otherwise 4-730. Defaults to -1."
+        },
+        "defaultValue": -1
+      },
+      "tableTotalRetentionInDays": {
+        "type": "Integer",
+        "metadata": {
+          "displayName": "Table total retention (days)",
+          "description": "Total retention in days (analytics + long-term) for each table. Use -1 for 'Same as workspace settings'. Otherwise 4-730, or 1095, 1460, 1826, 2191, 2556, 2922, 3288, 3653, 4018, 4383. Defaults to -1."
+        },
+        "defaultValue": -1
+      }
+    },
+    "policyDefinitionGroups": [
+      {
+        "name": "workspace-retention",
+        "displayName": "Workspace-level data retention"
+      },
+      {
+        "name": "table-retention",
+        "displayName": "Table-level data retention"
+      }
+    ],
+    "policyDefinitions": [
+      {
+        "policyDefinitionReferenceId": "configureLawWorkspaceRetention",
+        "policyDefinitionId": "__WORKSPACE_DEF_ID__",
+        "groupNames": [
+          "workspace-retention"
+        ],
+        "parameters": {
+          "effect": {
+            "value": "[parameters('effect')]"
+          },
+          "workspaceRetentionInDays": {
+            "value": "[parameters('workspaceRetentionInDays')]"
+          }
+        }
+      },
+      {
+        "policyDefinitionReferenceId": "configureLawTableRetention",
+        "policyDefinitionId": "__TABLE_DEF_ID__",
+        "groupNames": [
+          "table-retention"
+        ],
+        "parameters": {
+          "effect": {
+            "value": "[parameters('effect')]"
+          },
+          "tableRetentionInDays": {
+            "value": "[parameters('tableRetentionInDays')]"
+          },
+          "tableTotalRetentionInDays": {
+            "value": "[parameters('tableTotalRetentionInDays')]"
+          }
+        }
+      }
+    ]
+  }
+}

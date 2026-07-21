@@ -1,0 +1,16 @@
+# Bicep build output
+**/*.bicep.json
+automation/bicep/main.json
+
+# Terraform
+**/.terraform/
+**/.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+
+# OS / editor
+.DS_Store
+Thumbs.db

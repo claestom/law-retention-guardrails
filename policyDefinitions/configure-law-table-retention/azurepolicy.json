@@ -1,0 +1,198 @@
+{
+  "name": "b5f9e3d2-2c34-4d8b-ae6f-4a7b8c9d0e12",
+  "type": "Microsoft.Authorization/policyDefinitions",
+  "properties": {
+    "displayName": "Configure Log Analytics table data retention (analytics and total retention)",
+    "policyType": "Custom",
+    "mode": "All",
+    "description": "Governs the analytics retention (retentionInDays) and total retention (totalRetentionInDays) of individual tables in Log Analytics workspaces. Provide a number of days to pin the retention, or use -1 for 'Same as workspace settings' (the table inherits the workspace default and any long-term retention is removed). Audit flags tables whose retention differs, Deny blocks writes that would set a non-matching retention, and DeployIfNotExists remediates the retention. If no value is supplied, both settings default to -1 ('Same as workspace settings').",
+    "metadata": {
+      "category": "Monitoring",
+      "version": "1.1.0",
+      "source": "https://learn.microsoft.com/azure/azure-monitor/logs/data-retention-configure"
+    },
+    "parameters": {
+      "effect": {
+        "type": "String",
+        "metadata": {
+          "displayName": "Effect",
+          "description": "The policy effect. Audit reports tables with a non-matching retention, Deny blocks writes that would set a non-matching retention, and DeployIfNotExists remediates the retention to the specified values. Note: Deny evaluates the incoming request, which does not include the computed 'as default' flags, so prefer Audit or DeployIfNotExists when using the -1 ('Same as workspace settings') option."
+        },
+        "allowedValues": [
+          "Audit",
+          "Deny",
+          "DeployIfNotExists"
+        ],
+        "defaultValue": "Audit"
+      },
+      "tableRetentionInDays": {
+        "type": "Integer",
+        "metadata": {
+          "displayName": "Table analytics retention (days)",
+          "description": "Analytics (interactive) retention in days for each table. Use -1 for 'Same as workspace settings' (inherit the workspace default). Otherwise the allowed range is 4-730. Defaults to -1."
+        },
+        "defaultValue": -1
+      },
+      "tableTotalRetentionInDays": {
+        "type": "Integer",
+        "metadata": {
+          "displayName": "Table total retention (days)",
+          "description": "Total retention in days (analytics + long-term) for each table. Use -1 for 'Same as workspace settings' (no long-term retention beyond the workspace default). Otherwise valid values are 4-730, or 1095, 1460, 1826, 2191, 2556, 2922, 3288, 3653, 4018, 4383. Defaults to -1."
+        },
+        "defaultValue": -1
+      }
+    },
+    "policyRule": {
+      "if": {
+        "allOf": [
+          {
+            "field": "type",
+            "equals": "Microsoft.OperationalInsights/workspaces/tables"
+          },
+          {
+            "not": {
+              "allOf": [
+                {
+                  "anyOf": [
+                    {
+                      "allOf": [
+                        {
+                          "value": "[parameters('tableRetentionInDays')]",
+                          "equals": -1
+                        },
+                        {
+                          "field": "Microsoft.OperationalInsights/workspaces/tables/retentionInDaysAsDefault",
+                          "equals": true
+                        }
+                      ]
+                    },
+                    {
+                      "field": "Microsoft.OperationalInsights/workspaces/tables/retentionInDays",
+                      "equals": "[parameters('tableRetentionInDays')]"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "allOf": [
+                        {
+                          "value": "[parameters('tableTotalRetentionInDays')]",
+                          "equals": -1
+                        },
+                        {
+                          "field": "Microsoft.OperationalInsights/workspaces/tables/totalRetentionInDaysAsDefault",
+                          "equals": true
+                        }
+                      ]
+                    },
+                    {
+                      "field": "Microsoft.OperationalInsights/workspaces/tables/totalRetentionInDays",
+                      "equals": "[parameters('tableTotalRetentionInDays')]"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "then": {
+        "effect": "[parameters('effect')]",
+        "details": {
+          "type": "Microsoft.OperationalInsights/workspaces/tables",
+          "name": "[field('fullName')]",
+          "roleDefinitionIds": [
+            "/providers/Microsoft.Authorization/roleDefinitions/92aaf0da-9dab-42b6-94a3-d43ce8d16293"
+          ],
+          "existenceCondition": {
+            "allOf": [
+              {
+                "anyOf": [
+                  {
+                    "allOf": [
+                      {
+                        "value": "[parameters('tableRetentionInDays')]",
+                        "equals": -1
+                      },
+                      {
+                        "field": "Microsoft.OperationalInsights/workspaces/tables/retentionInDaysAsDefault",
+                        "equals": true
+                      }
+                    ]
+                  },
+                  {
+                    "field": "Microsoft.OperationalInsights/workspaces/tables/retentionInDays",
+                    "equals": "[parameters('tableRetentionInDays')]"
+                  }
+                ]
+              },
+              {
+                "anyOf": [
+                  {
+                    "allOf": [
+                      {
+                        "value": "[parameters('tableTotalRetentionInDays')]",
+                        "equals": -1
+                      },
+                      {
+                        "field": "Microsoft.OperationalInsights/workspaces/tables/totalRetentionInDaysAsDefault",
+                        "equals": true
+                      }
+                    ]
+                  },
+                  {
+                    "field": "Microsoft.OperationalInsights/workspaces/tables/totalRetentionInDays",
+                    "equals": "[parameters('tableTotalRetentionInDays')]"
+                  }
+                ]
+              }
+            ]
+          },
+          "deployment": {
+            "properties": {
+              "mode": "incremental",
+              "parameters": {
+                "tableFullName": {
+                  "value": "[field('fullName')]"
+                },
+                "tableRetentionInDays": {
+                  "value": "[parameters('tableRetentionInDays')]"
+                },
+                "tableTotalRetentionInDays": {
+                  "value": "[parameters('tableTotalRetentionInDays')]"
+                }
+              },
+              "template": {
+                "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                "contentVersion": "1.0.0.0",
+                "parameters": {
+                  "tableFullName": {
+                    "type": "string"
+                  },
+                  "tableRetentionInDays": {
+                    "type": "int"
+                  },
+                  "tableTotalRetentionInDays": {
+                    "type": "int"
+                  }
+                },
+                "resources": [
+                  {
+                    "type": "Microsoft.OperationalInsights/workspaces/tables",
+                    "apiVersion": "2025-07-01",
+                    "name": "[parameters('tableFullName')]",
+                    "properties": {
+                      "retentionInDays": "[if(equals(parameters('tableRetentionInDays'), -1), json('null'), parameters('tableRetentionInDays'))]",
+                      "totalRetentionInDays": "[if(equals(parameters('tableTotalRetentionInDays'), -1), json('null'), parameters('tableTotalRetentionInDays'))]"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

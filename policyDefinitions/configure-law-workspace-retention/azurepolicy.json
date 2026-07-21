@@ -1,0 +1,108 @@
+{
+  "name": "a4f8e2c1-1b23-4c7a-9d5e-3f6a7b8c9d01",
+  "type": "Microsoft.Authorization/policyDefinitions",
+  "properties": {
+    "displayName": "Configure Log Analytics workspace data retention (workspace level)",
+    "policyType": "Custom",
+    "mode": "Indexed",
+    "description": "Governs the workspace-level analytics data retention (retentionInDays) of Log Analytics workspaces against the number of days you specify. Audit flags workspaces whose retention differs, Deny blocks create/update operations that would set a different retention, and DeployIfNotExists corrects the retention. If no value is supplied, the target retention defaults to 30 days, which is the minimum retention period for a Log Analytics workspace.",
+    "metadata": {
+      "category": "Monitoring",
+      "version": "1.1.0",
+      "source": "https://learn.microsoft.com/azure/azure-monitor/logs/data-retention-configure"
+    },
+    "parameters": {
+      "effect": {
+        "type": "String",
+        "metadata": {
+          "displayName": "Effect",
+          "description": "The policy effect. Audit reports workspaces with a non-matching retention, Deny blocks writes that would set a non-matching retention, and DeployIfNotExists remediates the retention to the specified value."
+        },
+        "allowedValues": [
+          "Audit",
+          "Deny",
+          "DeployIfNotExists"
+        ],
+        "defaultValue": "DeployIfNotExists"
+      },
+      "workspaceRetentionInDays": {
+        "type": "Integer",
+        "metadata": {
+          "displayName": "Workspace retention (days)",
+          "description": "Workspace-level analytics data retention in days. This becomes the default analytics retention for all Analytics tables that still inherit the workspace setting. Allowed range is 30-730. Defaults to 30 (the minimum)."
+        },
+        "defaultValue": 30
+      }
+    },
+    "policyRule": {
+      "if": {
+        "allOf": [
+          {
+            "field": "type",
+            "equals": "Microsoft.OperationalInsights/workspaces"
+          },
+          {
+            "field": "Microsoft.OperationalInsights/workspaces/retentionInDays",
+            "notEquals": "[parameters('workspaceRetentionInDays')]"
+          }
+        ]
+      },
+      "then": {
+        "effect": "[parameters('effect')]",
+        "details": {
+          "type": "Microsoft.OperationalInsights/workspaces",
+          "name": "[field('name')]",
+          "roleDefinitionIds": [
+            "/providers/Microsoft.Authorization/roleDefinitions/92aaf0da-9dab-42b6-94a3-d43ce8d16293"
+          ],
+          "existenceCondition": {
+            "field": "Microsoft.OperationalInsights/workspaces/retentionInDays",
+            "equals": "[parameters('workspaceRetentionInDays')]"
+          },
+          "deployment": {
+            "properties": {
+              "mode": "incremental",
+              "parameters": {
+                "workspaceName": {
+                  "value": "[field('name')]"
+                },
+                "location": {
+                  "value": "[field('location')]"
+                },
+                "workspaceRetentionInDays": {
+                  "value": "[parameters('workspaceRetentionInDays')]"
+                }
+              },
+              "template": {
+                "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                "contentVersion": "1.0.0.0",
+                "parameters": {
+                  "workspaceName": {
+                    "type": "string"
+                  },
+                  "location": {
+                    "type": "string"
+                  },
+                  "workspaceRetentionInDays": {
+                    "type": "int"
+                  }
+                },
+                "resources": [
+                  {
+                    "type": "Microsoft.OperationalInsights/workspaces",
+                    "apiVersion": "2025-07-01",
+                    "name": "[parameters('workspaceName')]",
+                    "location": "[parameters('location')]",
+                    "properties": {
+                      "retentionInDays": "[parameters('workspaceRetentionInDays')]"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
