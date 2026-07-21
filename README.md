@@ -31,6 +31,8 @@ Each table has **two** retention settings (the same ones you see in the portal's
 
 The **workspace** retention (set by the workspace policy) is the default that every `-1` table inherits.
 
+> ⚠️ **Basic / Auxiliary Logs tables always report non-compliant.** These plans have a fixed analytics retention (30 days) that can't be changed, so they can never match the target analytics value. This is expected — treat those results as noise, or exclude those tables via a policy exemption.
+
 ## 1. Deploy the policies
 
 ```powershell
