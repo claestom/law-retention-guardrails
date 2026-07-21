@@ -1,35 +1,49 @@
 # Log Analytics Retention Guardrails
 
-Govern **Log Analytics data retention** at the workspace and table level.
-
-- **Workspace + table retention → Azure Policy** (audit/deny/deploy) — the initiative in `policyDefinitions/` + `policySetDefinitions/`.
-- **Table retention at scale → PowerShell / Automation runbook** (avoids per-table policy noise).
+Govern **Log Analytics data retention** — at the **workspace** level and per **table** — with Azure Policy for visibility and a script/runbook for configuration.
 
 ## Pick your path
 
 | I want to… | Use |
 |---|---|
-| Deploy the policies via script | `./deploy.ps1` |
-| Deploy the policies via portal | paste each `azurepolicy.portal.json` into **Policy → Definitions → + Policy definition** |
+| Deploy the retention policies via script | `./deploy.ps1` |
+| Deploy the retention policies via portal | paste each `azurepolicy.portal.json` into **Policy → Definitions → + Policy definition** |
 | Set table retention once, now | `./scripts/Set-LawTableRetention.ps1 -ResourceGroupName <rg>` |
-| Set table retention on a schedule | deploy the runbook (`automation/`) with Bicep or Terraform |
+| Set table retention on a schedule | deploy the runbook with Bicep or Terraform (below) |
 
-## Deploy the policy initiative
+## Retention model
+
+Each table has **two** retention settings (the same ones you see in the portal's *Manage table* screen):
+
+| Setting | What it controls | Allowed values |
+|---|---|---|
+| **Analytics retention** | how long data stays "hot" and interactively queryable | `4`–`730` days, or **`-1`** |
+| **Total retention** | analytics **+** long-term (archive) storage; must be ≥ analytics | `4`–`730` / `1095…4383` days, or **`-1`** |
+
+**`-1` = "Same as workspace settings"** — the table inherits the workspace's default retention instead of a fixed number. It's the default dropdown option in the portal. Use a number to pin a table; use `-1` to let it follow the workspace.
+
+The **workspace** retention (set by the workspace policy) is the default that every `-1` table inherits.
+
+## 1. Deploy the policies
 
 ```powershell
 ./deploy.ps1 -SubscriptionId <sub-id>
 ```
+Creates the workspace + table retention policy definitions and the initiative. Assign it in **Audit** to report drift, or **DeployIfNotExists** to remediate the workspace setting.
 
-## Set table retention (one-off)
+## 2. Set table retention (separate script)
 
+**Why a script instead of the policy?** A workspace exposes *every* built-in table as a resource — often 800–1500, most of them empty. A DeployIfNotExists policy would queue **one remediation deployment per table, per workspace** (slow, noisy, throttling-prone). The script loops tables directly, is **idempotent** (skips tables already correct), and lets you target exactly what you want. So: use the **policy to audit**, and this **script to configure**.
+
+Run it once:
 ```powershell
-# preview first
+# preview (no changes)
 ./scripts/Set-LawTableRetention.ps1 -ResourceGroupName <rg> -WhatIf
-# apply (analytics inherits workspace, total = 730 days)
+# apply — analytics inherits workspace (-1), total = 730 days
 ./scripts/Set-LawTableRetention.ps1 -ResourceGroupName <rg>
 ```
 
-## Set table retention on a schedule (runbook)
+Or run it on a schedule via an Automation runbook:
 
 **Bicep**
 ```powershell
@@ -47,21 +61,16 @@ Both create an Automation Account (managed identity), the runbook, a weekly sche
 
 ## Change settings later (no redeploy)
 
-Portal → your Automation Account → **Shared Resources → Variables**, edit and save:
+Portal → Automation Account → **Shared Resources → Variables**, edit and save:
 
 | Variable | Meaning |
 |---|---|
-| `law-retention-resource-group` | RG with the workspaces |
-| `law-retention-workspace` | single workspace, or empty = all |
-| `law-retention-analytics-days` | `-1` = same as workspace |
-| `law-retention-total-days` | e.g. `730` |
+| `law-retention-resource-group` | RG containing the workspaces |
+| `law-retention-workspace` | one workspace name, or empty = all in the RG |
+| `law-retention-analytics-days` | analytics retention (`-1` = inherit workspace) |
+| `law-retention-total-days` | total retention (e.g. `730`) |
 
-Changes apply on the next run. Run now: Automation Account → **Runbooks** → `Invoke-LawTableRetention` → **Start** (pass `PREVIEWONLY = true` for a dry run).
-
-## Retention values
-
-- `-1` = **same as workspace** (inherit).
-- Analytics: `4`–`730` days. Total: `4`–`730`, or `1095…4383`.
+Changes apply on the next run. Run now: **Runbooks → `Invoke-LawTableRetention` → Start** (pass `PREVIEWONLY = true` for a dry run).
 
 ## Prerequisites
 
