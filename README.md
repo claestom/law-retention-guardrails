@@ -3,13 +3,36 @@
 Govern **Log Analytics data retention** — at the **workspace** level and per **table** — with Azure Policy for visibility and a script/runbook for configuration.
 
 > ⚠️ **Configure these files first — they ship with the author's lab values.** Subscription IDs, resource-group names, workspace names and the runbook URL in the files below all point at a demo environment. **Replace every placeholder with your own values before deploying**, or the commands will target the wrong (or a non-existent) tenant.
->
-> | File | Change |
-> |---|---|
-> | `deploy.ps1` | `-SubscriptionId` you pass in / the guardrail sub id inside the script |
-> | `automation/bicep/main.bicepparam` | `targetResourceGroupName`, `automationAccountName`, `runbookContentUri` (your repo's raw URL) |
-> | `automation/terraform/terraform.tfvars.example` → copy to `terraform.tfvars` | `subscription_id`, `automation_resource_group_name`, `target_resource_group_name`, `schedule_start_time` |
-> | command args | every `<sub-id>`, `<rg>`, `<automation-rg>`, `<mgId>`, `<location>`, `<principalId>` placeholder |
+
+<details>
+<summary><b>Files to edit before deploying</b> (click to expand)</summary>
+
+**Not everything needs changing.** Only the values that point at a specific environment are mandatory. The retention numbers, scope defaults, and empty filters below are safe to leave as-is.
+
+**🔴 Must change (environment-specific — these hold the author's lab values):**
+
+| File | Value |
+|---|---|
+| `deploy.ps1` | `-SubscriptionId` you pass in / the guardrail sub id inside the script |
+| `automation/bicep/main.bicepparam` | `targetResourceGroupName`; `runbookContentUri` (your repo's raw URL — unless you upload the runbook after deploy) |
+| `automation/terraform/terraform.tfvars.example` → copy to `terraform.tfvars` | `subscription_id`, `automation_resource_group_name`, `target_resource_group_name`, `schedule_start_time` (must be in the future) |
+| command args | every `<sub-id>`, `<rg>`, `<automation-rg>`, `<mgId>`, `<location>`, `<principalId>` placeholder |
+
+**🟡 Change only if you want that behaviour (otherwise the defaults are fine):**
+
+| Value | Default | Change when… |
+|---|---|---|
+| `analyticsRetentionInDays` / `analytics_retention_in_days` | `-1` (inherit workspace) | you want a fixed analytics retention |
+| `totalRetentionInDays` / `total_retention_in_days` | `730` | you want a different total retention |
+| `workspaceNameFilter` / `workspace_name_filter` | `''` (all workspaces) | you want to target one workspace |
+| `scopeMode` / `scope_mode` | `ResourceGroup` | you want `Subscription` or `ManagementGroup` scope |
+| `subscriptionId` / `scope_subscription_id` | `''` | `Subscription` scope **and** a sub other than the identity's home one |
+| `managementGroupName` / `scope_management_group` | `''` | `ManagementGroup` scope |
+| `createRgRoleAssignment` / `role_assignment_scope` | RG-level grant | you widen scope and grant at sub/MG level instead |
+
+**🟢 Safe as-is (a name for a resource the deployment creates — rename only if you prefer):** `automationAccountName` / `automation_account_name`, `runbookName`, `scheduleName`.
+
+</details>
 
 ## Prerequisites
 
