@@ -39,6 +39,15 @@ Govern **Log Analytics data retention** — at the **workspace** level and per *
 - Azure CLI + `Az.Accounts`, `Az.OperationalInsights` (also imported into the Automation Account for the runbook).
 - **Log Analytics Contributor** on the target scope.
 
+## Get the code
+
+```bash
+git clone https://github.com/claestom/law-retention-guardrails.git
+cd law-retention-guardrails
+```
+
+Then edit the files in the **⚠️ Configure these files first** block above before running any command below.
+
 ## Pick your path
 
 | I want to… | Use |
