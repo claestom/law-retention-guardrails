@@ -30,7 +30,7 @@
 
 .NOTES
     Runbook type: PowerShell 7.2. Requires Az.Accounts, Az.OperationalInsights and
-    (for Subscription/ManagementGroup scope) Az.ResourceGraph imported into the
+    (for Subscription/ManagementGroup scope) Az.Resources imported into the
     Automation Account, and the managed identity granted 'Log Analytics Contributor'
     at the matching scope (resource group, subscription, or management group).
 #>
@@ -84,23 +84,33 @@ function Test-RetentionMatch {
     return ($current -eq $desired)
 }
 
-# Enumerate workspaces via Azure Resource Graph, scoped to a management group,
-# a single subscription, or (if neither) every subscription the identity can see.
-function Get-GraphWorkspaces {
-    param([string] $ManagementGroup, [string] $Subscription)
-    $q = "resources | where type =~ 'microsoft.operationalinsights/workspaces' | project name, resourceGroup, subscriptionId"
-    $out = @(); $skip = 0
-    do {
-        $p = @{ Query = $q; First = 1000; Skip = $skip }
-        if ($ManagementGroup) { $p['ManagementGroup'] = $ManagementGroup }
-        elseif ($Subscription) { $p['Subscription'] = @($Subscription) }
-        $page = Search-AzGraph @p
-        foreach ($r in $page) {
-            $out += [pscustomobject]@{ SubscriptionId = $r.subscriptionId; ResourceGroupName = $r.resourceGroup; Name = $r.name }
+# Enumerate every workspace in a subscription using only Az.OperationalInsights
+# (no Azure Resource Graph dependency). Switches Az context if needed.
+function Get-SubscriptionWorkspaces {
+    param([string] $SubscriptionId)
+    if ($SubscriptionId -and (Get-AzContext).Subscription.Id -ne $SubscriptionId) {
+        Set-AzContext -Subscription $SubscriptionId | Out-Null
+    }
+    $sid = (Get-AzContext).Subscription.Id
+    Get-AzOperationalInsightsWorkspace | ForEach-Object {
+        [pscustomobject]@{ SubscriptionId = $sid; ResourceGroupName = $_.ResourceGroupName; Name = $_.Name }
+    }
+}
+
+# All subscription ids under a management group (recursive), via Az.Resources.
+function Get-ManagementGroupSubscriptionIds {
+    param([string] $ManagementGroup)
+    $ids   = New-Object System.Collections.Generic.List[string]
+    $queue = New-Object System.Collections.Generic.Queue[string]
+    $queue.Enqueue($ManagementGroup)
+    while ($queue.Count -gt 0) {
+        $node = Get-AzManagementGroup -GroupId $queue.Dequeue() -Expand -WarningAction SilentlyContinue
+        foreach ($c in $node.Children) {
+            if ($c.Type -match 'subscriptions') { $ids.Add($c.Name) }   # $c.Name = subscription id
+            else { $queue.Enqueue($c.Name) }                            # nested management group
         }
-        $skip += $page.Count
-    } while ($page.Count -eq 1000)
-    return $out
+    }
+    return $ids
 }
 
 switch ($scopeMode) {
@@ -112,13 +122,14 @@ switch ($scopeMode) {
     }
     'Subscription' {
         $targetSub = [string]::IsNullOrWhiteSpace($subId) ? (Get-AzContext).Subscription.Id : $subId
-        if ((Get-AzContext).Subscription.Id -ne $targetSub) { Set-AzContext -Subscription $targetSub | Out-Null }
         Write-Output "Subscription     : $targetSub"
-        $targets = Get-GraphWorkspaces -Subscription $targetSub
+        $targets = Get-SubscriptionWorkspaces -SubscriptionId $targetSub
     }
     'ManagementGroup' {
         if ([string]::IsNullOrWhiteSpace($mgName)) { throw "Scope 'ManagementGroup' requires law-retention-management-group." }
-        $targets = Get-GraphWorkspaces -ManagementGroup $mgName
+        $subIds = Get-ManagementGroupSubscriptionIds -ManagementGroup $mgName
+        Write-Output ("Subscriptions under MG: {0}" -f @($subIds).Count)
+        $targets = foreach ($s in $subIds) { Get-SubscriptionWorkspaces -SubscriptionId $s }
     }
     default { throw "Unknown scope '$scopeMode'. Use ResourceGroup, Subscription, or ManagementGroup." }
 }

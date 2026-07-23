@@ -135,7 +135,7 @@ At **deploy time** you pass this as a parameter; it's stored as the `law-retenti
 
 > **Subscription scope** targets the managed identity's home subscription (where the Automation Account lives). Set `subscriptionId` (Bicep) / `scope_subscription_id` (TF) only to target a *different* subscription — the identity must then have Log Analytics Contributor there too.
 
-> For `Subscription` / `ManagementGroup` scope the runbook uses **Azure Resource Graph** — import the **`Az.ResourceGraph`** module into the Automation Account (alongside `Az.Accounts` and `Az.OperationalInsights`).
+> For `Subscription` / `ManagementGroup` scope the runbook enumerates workspaces with **`Az.Resources`** (`Get-AzManagementGroup`) and **`Az.OperationalInsights`** — both ship with the Automation Account's default Az modules, so no extra module import is needed. The managed identity just needs **Log Analytics Contributor** at the subscription / management-group scope.
 
 ## Change settings later (no redeploy)
 

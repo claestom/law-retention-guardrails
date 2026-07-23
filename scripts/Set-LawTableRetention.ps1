@@ -96,20 +96,32 @@ function Test-RetentionMatch {
     return ($current -eq $desired)
 }
 
-# Enumerate workspaces across subscriptions via Azure Resource Graph (needs Az.ResourceGraph).
-function Get-GraphWorkspaces {
-    param([string] $ManagementGroup, [string] $Subscription)
-    $q = "resources | where type =~ 'microsoft.operationalinsights/workspaces' | project name, resourceGroup, subscriptionId"
-    $out = @(); $skip = 0
-    do {
-        $p = @{ Query = $q; First = 1000; Skip = $skip }
-        if ($ManagementGroup) { $p['ManagementGroup'] = $ManagementGroup }
-        elseif ($Subscription) { $p['Subscription'] = @($Subscription) }
-        $page = Search-AzGraph @p
-        foreach ($r in $page) { $out += [pscustomobject]@{ SubscriptionId = $r.subscriptionId; ResourceGroupName = $r.resourceGroup; Name = $r.name } }
-        $skip += $page.Count
-    } while ($page.Count -eq 1000)
-    return $out
+# Enumerate every workspace in a subscription (no Azure Resource Graph dependency).
+function Get-SubscriptionWorkspaces {
+    param([string] $SubscriptionId)
+    if ($SubscriptionId -and (Get-AzContext).Subscription.Id -ne $SubscriptionId) {
+        Set-AzContext -Subscription $SubscriptionId | Out-Null
+    }
+    $sid = (Get-AzContext).Subscription.Id
+    Get-AzOperationalInsightsWorkspace | ForEach-Object {
+        [pscustomobject]@{ SubscriptionId = $sid; ResourceGroupName = $_.ResourceGroupName; Name = $_.Name }
+    }
+}
+
+# All subscription ids under a management group (recursive), via Az.Resources.
+function Get-ManagementGroupSubscriptionIds {
+    param([string] $ManagementGroup)
+    $ids   = New-Object System.Collections.Generic.List[string]
+    $queue = New-Object System.Collections.Generic.Queue[string]
+    $queue.Enqueue($ManagementGroup)
+    while ($queue.Count -gt 0) {
+        $node = Get-AzManagementGroup -GroupId $queue.Dequeue() -Expand -WarningAction SilentlyContinue
+        foreach ($c in $node.Children) {
+            if ($c.Type -match 'subscriptions') { $ids.Add($c.Name) }
+            else { $queue.Enqueue($c.Name) }
+        }
+    }
+    return $ids
 }
 
 # ---- Discover workspaces in scope ------------------------------------------
@@ -120,10 +132,11 @@ switch ($Scope) {
             [pscustomobject]@{ SubscriptionId = (Get-AzContext).Subscription.Id; ResourceGroupName = $_.ResourceGroupName; Name = $_.Name }
         }
     }
-    'Subscription' { $targets = Get-GraphWorkspaces -Subscription (Get-AzContext).Subscription.Id }
+    'Subscription' { $targets = Get-SubscriptionWorkspaces -SubscriptionId (Get-AzContext).Subscription.Id }
     'ManagementGroup' {
         if (-not $ManagementGroupName) { throw "Scope 'ManagementGroup' requires -ManagementGroupName." }
-        $targets = Get-GraphWorkspaces -ManagementGroup $ManagementGroupName
+        $subIds = Get-ManagementGroupSubscriptionIds -ManagementGroup $ManagementGroupName
+        $targets = foreach ($s in $subIds) { Get-SubscriptionWorkspaces -SubscriptionId $s }
     }
 }
 if ($WorkspaceName) { $targets = $targets | Where-Object { $_.Name -eq $WorkspaceName } }
