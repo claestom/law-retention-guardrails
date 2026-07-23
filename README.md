@@ -4,6 +4,20 @@ Govern **Log Analytics data retention** — at the **workspace** level and per *
 
 > ⚠️ **Configure these files first — they ship with the author's lab values.** Subscription IDs, resource-group names, workspace names and the runbook URL in the files below all point at a demo environment. **Replace every placeholder with your own values before deploying**, or the commands will target the wrong (or a non-existent) tenant.
 
+## Prerequisites
+
+- Azure CLI + `Az.Accounts`, `Az.OperationalInsights` (also imported into the Automation Account for the runbook).
+- **Log Analytics Contributor** on the target scope.
+
+## Get the code
+
+```bash
+git clone https://github.com/claestom/law-retention-guardrails.git
+cd law-retention-guardrails
+```
+
+Then edit the files in the **⚠️ Configure these files first** block below before running any command below.
+
 <details>
 <summary><b>Files to edit before deploying</b> (click to expand)</summary>
 
@@ -33,20 +47,6 @@ Govern **Log Analytics data retention** — at the **workspace** level and per *
 **🟢 Safe as-is (a name for a resource the deployment creates — rename only if you prefer):** `automationAccountName` / `automation_account_name`, `runbookName`, `scheduleName`.
 
 </details>
-
-## Prerequisites
-
-- Azure CLI + `Az.Accounts`, `Az.OperationalInsights` (also imported into the Automation Account for the runbook).
-- **Log Analytics Contributor** on the target scope.
-
-## Get the code
-
-```bash
-git clone https://github.com/claestom/law-retention-guardrails.git
-cd law-retention-guardrails
-```
-
-Then edit the files in the **⚠️ Configure these files first** block above before running any command below.
 
 ## Pick your path
 
