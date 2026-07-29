@@ -5,7 +5,7 @@
     "displayName": "Configure Log Analytics table data retention (analytics and total retention)",
     "policyType": "Custom",
     "mode": "All",
-    "description": "Governs the analytics retention (retentionInDays) and total retention (totalRetentionInDays) of individual tables in Log Analytics workspaces. Provide a number of days to pin the retention, or use -1 for 'Same as workspace settings' (the table inherits the workspace default and any long-term retention is removed). Audit flags tables whose retention differs, Deny blocks writes that would set a non-matching retention, and DeployIfNotExists remediates the retention. If no value is supplied, both settings default to -1 ('Same as workspace settings').",
+    "description": "Governs analytics (retentionInDays) and total (totalRetentionInDays) retention of individual tables in Log Analytics workspaces. Provide a number of days to pin retention, or -1 for 'Same as workspace settings' (inherit the workspace default; long-term retention removed). Audit flags non-matching tables, Deny blocks non-matching writes, DeployIfNotExists remediates. Defaults to -1.",
     "metadata": {
       "category": "Monitoring",
       "version": "1.1.0",
