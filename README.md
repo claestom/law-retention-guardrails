@@ -61,38 +61,24 @@ The **workspace** retention (set by the workspace policy) is the default that ev
 ```powershell
 ./deploy.ps1 -SubscriptionId <sub-id>
 ```
-Creates the workspace + table retention policy definitions and the initiative. Assign it in **Audit** to report drift, or **DeployIfNotExists** to remediate the workspace setting.
+Creates the workspace + table retention policy definitions and the initiative. The initiative runs in **Audit** only - it reports workspaces and tables whose retention doesn't match, without changing anything.
 
 <details>
-<summary><b>Optional:</b> assign the policies</summary>
+<summary><b>Optional:</b> assign the initiative</summary>
 
-The definitions/initiative only <i>describe</i> the rules - an **assignment** is what makes them evaluate against your resources. Assign the two definitions separately so each gets the right effect: the **workspace** policy enforces retention, while the **table** policy stays in **Audit** (the Automation runbook from step 2 is what actually configures table retention).
+The definitions/initiative only <i>describe</i> the rules - an **assignment** is what makes them evaluate against your resources. Assign the initiative in **Audit** so it reports workspaces and tables whose retention doesn't match, without changing anything.
 
 ```powershell
-$sub = "<sub-id>"; $loc = "westeurope"
-$wsId  = az policy definition show --name configure-law-workspace-retention --query id -o tsv
-$tblId = az policy definition show --name configure-law-table-retention --query id -o tsv
+$sub = "<sub-id>"
+$setId = az policy set-definition show --name configure-law-data-retention --query id -o tsv
 
-# Workspace: enforce with DeployIfNotExists (requires a managed identity + location)
-'{"effect":{"value":"DeployIfNotExists"},"workspaceRetentionInDays":{"value":90}}' | Set-Content ws-params.json -Encoding utf8
-az policy assignment create --name law-workspace-retention `
-  --display-name 'Configure Log Analytics workspace retention' `
-  --policy $wsId --scope /subscriptions/$sub `
-  --mi-system-assigned --location $loc --params '@ws-params.json'
-
-# Grant the assignment identity permission to configure workspaces
-$miId = az policy assignment show --name law-workspace-retention --scope /subscriptions/$sub --query identity.principalId -o tsv
-az role assignment create --assignee-object-id $miId --assignee-principal-type ServicePrincipal `
-  --role "Log Analytics Contributor" --scope /subscriptions/$sub
-
-# Table: Audit only - the Automation runbook (step 2) configures table retention
-'{"effect":{"value":"Audit"}}' | Set-Content tbl-params.json -Encoding utf8
-az policy assignment create --name law-table-retention `
-  --display-name 'Audit Log Analytics table retention' `
-  --policy $tblId --scope /subscriptions/$sub --params '@tbl-params.json'
+'{"effect":{"value":"Audit"}}' | Set-Content assign-params.json -Encoding utf8
+az policy assignment create --name law-data-retention `
+  --display-name 'Audit Log Analytics data retention' `
+  --policy-set-definition $setId --scope /subscriptions/$sub --params '@assign-params.json'
 ```
 
-> The **table-level policy is Audit** on purpose - it only reports drift. Table retention is configured by the Automation runbook in step 2, not by policy remediation. Swap `/subscriptions/$sub` for `/providers/Microsoft.Management/managementGroups/<mg-id>` to assign at management-group scope.
+> This is **Audit only** - it just reports drift, so no managed identity or role assignment is needed. Table retention is configured by the Automation runbook in step 2, and workspace retention by the policy definition or the portal. Swap `/subscriptions/$sub` for `/providers/Microsoft.Management/managementGroups/<mg-id>` to assign at management-group scope.
 
 </details>
 

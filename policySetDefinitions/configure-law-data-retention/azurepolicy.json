@@ -4,7 +4,7 @@
   "properties": {
     "displayName": "Configure Log Analytics data retention (workspace and table level)",
     "policyType": "Custom",
-    "description": "Initiative that governs data retention for Log Analytics workspaces at both the workspace level (default analytics retention) and the individual table level (analytics retention and total retention). Each member policy supports an Audit, Deny, or DeployIfNotExists effect. Table settings default to -1 ('Same as workspace settings') and the workspace setting defaults to 30 days (the minimum).",
+    "description": "Initiative that governs data retention for Log Analytics workspaces at both the workspace level (default analytics retention) and the individual table level (analytics retention and total retention). Both member policies run in Audit only, reporting workspaces and tables whose retention does not match. Table settings default to -1 ('Same as workspace settings') and the workspace setting defaults to 30 days (the minimum).",
     "metadata": {
       "category": "Monitoring",
       "version": "1.1.0",
@@ -15,14 +15,12 @@
         "type": "String",
         "metadata": {
           "displayName": "Effect",
-          "description": "The effect applied by both member policies. Audit reports non-matching retention, Deny blocks writes that would set a non-matching retention, and DeployIfNotExists remediates the retention."
+          "description": "The effect applied by both member policies. Only Audit is supported: it reports workspaces and tables whose retention does not match without changing anything."
         },
         "allowedValues": [
-          "Audit",
-          "Deny",
-          "DeployIfNotExists"
+          "Audit"
         ],
-        "defaultValue": "DeployIfNotExists"
+        "defaultValue": "Audit"
       },
       "workspaceRetentionInDays": {
         "type": "Integer",
