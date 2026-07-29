@@ -94,6 +94,15 @@ Run it once:
 ./scripts/Set-LawTableRetention.ps1 -ResourceGroupName <rg>
 ```
 
+The default `-Scope` is `ResourceGroup`. To go wider, set `-Scope Subscription` or `-Scope ManagementGroup` (add `-WhatIf` to preview either):
+```powershell
+# every workspace in the current subscription (or pass -SubscriptionId <sub-id>)
+./scripts/Set-LawTableRetention.ps1 -Scope Subscription
+
+# every workspace under a management group
+./scripts/Set-LawTableRetention.ps1 -Scope ManagementGroup -ManagementGroupName <mg-id>
+```
+
 Or run it on a schedule via an **Automation runbook** - each guide has the full parameter list:
 
 **Bicep** ([full guide](automation/bicep/README.md))
