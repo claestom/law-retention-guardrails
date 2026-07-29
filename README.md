@@ -63,6 +63,39 @@ The **workspace** retention (set by the workspace policy) is the default that ev
 ```
 Creates the workspace + table retention policy definitions and the initiative. Assign it in **Audit** to report drift, or **DeployIfNotExists** to remediate the workspace setting.
 
+<details>
+<summary><b>Optional:</b> assign the policies</summary>
+
+The definitions/initiative only <i>describe</i> the rules - an **assignment** is what makes them evaluate against your resources. Assign the two definitions separately so each gets the right effect: the **workspace** policy enforces retention, while the **table** policy stays in **Audit** (the Automation runbook from step 2 is what actually configures table retention).
+
+```powershell
+$sub = "<sub-id>"; $loc = "westeurope"
+$wsId  = az policy definition show --name configure-law-workspace-retention --query id -o tsv
+$tblId = az policy definition show --name configure-law-table-retention --query id -o tsv
+
+# Workspace: enforce with DeployIfNotExists (requires a managed identity + location)
+'{"effect":{"value":"DeployIfNotExists"},"workspaceRetentionInDays":{"value":90}}' | Set-Content ws-params.json -Encoding utf8
+az policy assignment create --name law-workspace-retention `
+  --display-name 'Configure Log Analytics workspace retention' `
+  --policy $wsId --scope /subscriptions/$sub `
+  --mi-system-assigned --location $loc --params '@ws-params.json'
+
+# Grant the assignment identity permission to configure workspaces
+$miId = az policy assignment show --name law-workspace-retention --scope /subscriptions/$sub --query identity.principalId -o tsv
+az role assignment create --assignee-object-id $miId --assignee-principal-type ServicePrincipal `
+  --role "Log Analytics Contributor" --scope /subscriptions/$sub
+
+# Table: Audit only - the Automation runbook (step 2) configures table retention
+'{"effect":{"value":"Audit"}}' | Set-Content tbl-params.json -Encoding utf8
+az policy assignment create --name law-table-retention `
+  --display-name 'Audit Log Analytics table retention' `
+  --policy $tblId --scope /subscriptions/$sub --params '@tbl-params.json'
+```
+
+> The **table-level policy is Audit** on purpose - it only reports drift. Table retention is configured by the Automation runbook in step 2, not by policy remediation. Swap `/subscriptions/$sub` for `/providers/Microsoft.Management/managementGroups/<mg-id>` to assign at management-group scope.
+
+</details>
+
 ## 2. Set table retention (separate script)
 
 **Why a script instead of the policy?** A workspace exposes *every* built-in table as a resource - often 800-1500, most of them empty. A DeployIfNotExists policy would queue **one remediation deployment per table, per workspace** (slow, noisy, throttling-prone). The script loops tables directly, is **idempotent** (skips tables already correct), and lets you target exactly what you want. So: use the **policy to audit**, and this **script to configure**.
