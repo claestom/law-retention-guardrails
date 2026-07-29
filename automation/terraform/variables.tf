@@ -54,6 +54,18 @@ variable "total_retention_in_days" {
   description = "Total retention in days (analytics + long-term). -1 = same as workspace."
 }
 
+variable "workspace_retention_in_days" {
+  type        = number
+  default     = -1
+  description = "Workspace-level default retention in days. 0 or -1 = leave the workspace default unchanged; otherwise 30-730."
+}
+
+variable "throttle_limit" {
+  type        = number
+  default     = 10
+  description = "Parallel table updates per workspace in the runbook."
+}
+
 variable "workspace_name_filter" {
   type        = string
   default     = ""

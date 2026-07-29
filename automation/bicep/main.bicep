@@ -38,6 +38,12 @@ param analyticsRetentionInDays int = -1
 @description('Total retention in days (analytics + long-term). -1 = same as workspace.')
 param totalRetentionInDays int = 730
 
+@description('Workspace-level default retention in days. 0 or -1 = leave the workspace default unchanged; otherwise 30-730.')
+param workspaceRetentionInDays int = -1
+
+@description('Parallel table updates per workspace in the runbook. Default 10.')
+param throttleLimit int = 10
+
 @description('Optional single workspace name to target. Empty = all workspaces in the RG.')
 param workspaceNameFilter string = ''
 
@@ -149,6 +155,24 @@ resource vTotal 'Microsoft.Automation/automationAccounts/variables@2023-11-01' =
   properties: {
     isEncrypted: false
     value: string(totalRetentionInDays)
+  }
+}
+
+resource vWorkspaceDays 'Microsoft.Automation/automationAccounts/variables@2023-11-01' = {
+  parent: aa
+  name: 'law-retention-workspace-days'
+  properties: {
+    isEncrypted: false
+    value: string(workspaceRetentionInDays)
+  }
+}
+
+resource vThrottle 'Microsoft.Automation/automationAccounts/variables@2023-11-01' = {
+  parent: aa
+  name: 'law-retention-throttle'
+  properties: {
+    isEncrypted: false
+    value: string(throttleLimit)
   }
 }
 

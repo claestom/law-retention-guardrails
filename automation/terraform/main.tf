@@ -84,6 +84,20 @@ resource "azurerm_automation_variable_int" "total_days" {
   value                   = var.total_retention_in_days
 }
 
+resource "azurerm_automation_variable_int" "workspace_days" {
+  name                    = "law-retention-workspace-days"
+  resource_group_name     = data.azurerm_resource_group.automation.name
+  automation_account_name = azurerm_automation_account.this.name
+  value                   = var.workspace_retention_in_days
+}
+
+resource "azurerm_automation_variable_int" "throttle" {
+  name                    = "law-retention-throttle"
+  resource_group_name     = data.azurerm_resource_group.automation.name
+  automation_account_name = azurerm_automation_account.this.name
+  value                   = var.throttle_limit
+}
+
 # ---- Runbook (content inlined from the repo file) ---------------------------
 resource "azurerm_automation_runbook" "this" {
   name                    = var.runbook_name

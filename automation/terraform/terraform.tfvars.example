@@ -1,23 +1,39 @@
 subscription_id                = "794194cd-a4b7-4024-970c-9533c4babff0"
 automation_resource_group_name = "rg-automation"
-target_resource_group_name     = "rg-azure-monitor-lab"
 automation_account_name        = "aa-law-retention"
 
 # Must be >5 minutes in the future (RFC3339, UTC shown here).
 schedule_start_time = "2026-07-22T03:00:00Z"
 
+# ---- Retention the runbook applies to every table --------------------------
 analytics_retention_in_days = -1
 total_retention_in_days     = 730
 workspace_name_filter       = ""
 
-# Scope of workspaces the runbook configures:
-#   ResourceGroup (default) | Subscription | ManagementGroup
-scope_mode              = "ResourceGroup"
-# Only used when scope_mode = "ManagementGroup"
-scope_management_group  = ""
-management_group_name   = ""
-# Only used when scope_mode = "Subscription" to target a DIFFERENT subscription than the
-# Automation Account's own. Empty = the identity's home subscription.
-scope_subscription_id   = ""
-# Where to grant the managed identity: resource_group | subscription | management_group
-role_assignment_scope   = "resource_group"
+# Workspace-level default retention. 0 or -1 = leave unchanged; otherwise 30-730.
+workspace_retention_in_days = -1
+# Parallel table updates per workspace.
+throttle_limit              = 10
+
+# ---- Scope: which workspaces the runbook configures ------------------------
+# ResourceGroup (default) | Subscription | ManagementGroup
+scope_mode = "Subscription"
+
+# Provide ONLY when scope_mode = "ResourceGroup": the resource group holding the
+# Log Analytics workspaces to configure. (Still required by the config as a data
+# source, so keep a valid RG name even for other scopes.)
+target_resource_group_name = "rg-azure-monitor-lab"
+
+# Provide ONLY when scope_mode = "Subscription" to target a DIFFERENT subscription
+# than the Automation Account's own. Empty = the identity's home subscription.
+scope_subscription_id = ""
+
+# Provide ONLY when scope_mode = "ManagementGroup": the management group id/name
+# the runbook enumerates.
+scope_management_group = ""
+
+# ---- RBAC: where to grant the identity Log Analytics Contributor ------------
+# resource_group | subscription | management_group  (match this to scope_mode)
+role_assignment_scope = "subscription"
+# Required ONLY when role_assignment_scope = "management_group".
+management_group_name = ""

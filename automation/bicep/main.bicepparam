@@ -5,6 +5,10 @@ param automationAccountName = 'aa-law-retention'
 // ---- Retention the runbook applies to every table --------------------------
 param analyticsRetentionInDays = -1
 param totalRetentionInDays = 730
+// Workspace-level default retention: 0/-1 = leave unchanged, otherwise 30-730.
+param workspaceRetentionInDays = -1
+// Parallel table updates per workspace.
+param throttleLimit = 10
 param workspaceNameFilter = ''
 
 // ---- Scope: which workspaces the runbook configures ------------------------
