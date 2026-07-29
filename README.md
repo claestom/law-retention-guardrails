@@ -32,39 +32,11 @@ Then edit the files in the **⚠️ Configure these files first** block below be
 | `automation/terraform/terraform.tfvars.example` → copy to `terraform.tfvars` | `subscription_id`, `automation_resource_group_name`, `target_resource_group_name`, `schedule_start_time` (must be in the future) |
 | command args | every `<sub-id>`, `<rg>`, `<automation-rg>`, `<mgId>`, `<location>`, `<principalId>` placeholder |
 
-**🟡 Everything else is optional** - retention values, scope, subscription/management-group and RBAC settings all have safe defaults. See the full **[Configuration](#configuration)** table for every parameter, its Bicep/Terraform name, default, and when to change it.
+**🟡 Everything else is optional** - retention values, scope, subscription/management-group and RBAC settings all have safe defaults. Full parameter lists live in the per-tool guides: **[Bicep](automation/bicep/README.md)** · **[Terraform](automation/terraform/README.md)**.
 
 **🟢 Safe as-is (a name for a resource the deployment creates - rename only if you prefer):** `automationAccountName` / `automation_account_name`, `runbookName`, `scheduleName`.
 
 </details>
-
-## Configuration
-
-Every deploy-time setting in one place. **Bicep** values go in [`automation/bicep/main.bicepparam`](automation/bicep/main.bicepparam); **Terraform** values in `terraform.tfvars` (copy from `terraform.tfvars.example`). Only the rows marked **required** must be changed - the rest have working defaults.
-
-| Bicep param | Terraform variable | What it sets | Default |
-|---|---|---|---|
-| `targetResourceGroupName` | `target_resource_group_name` | RG holding the workspaces (also the default RBAC + runbook scope) | lab value — **required** |
-| _(deployment `-g`)_ | `automation_resource_group_name` | RG that hosts the Automation Account | lab value — **required (TF)** |
-| _(deployment `--subscription`)_ | `subscription_id` | subscription to deploy into | lab value — **required (TF)** |
-| `runbookContentUri` | _(TF embeds the file)_ | raw URL Bicep pulls the runbook from | `''` → empty runbook; set the raw URL or upload after |
-| `scheduleStartTime` | `schedule_start_time` | first schedule run (RFC3339, must be future) | Bicep: now+2h · TF: **required** |
-| `analyticsRetentionInDays` | `analytics_retention_in_days` | analytics retention written to tables | `-1` (inherit workspace) |
-| `totalRetentionInDays` | `total_retention_in_days` | total (analytics + archive) retention | `730` |
-| `workspaceNameFilter` | `workspace_name_filter` | limit to a single workspace | `''` (all in scope) |
-| `scopeMode` | `scope_mode` | which workspaces the runbook enumerates: `ResourceGroup` \| `Subscription` \| `ManagementGroup` | `ResourceGroup` |
-| `subscriptionId` | `scope_subscription_id` | target sub for `Subscription` scope | `''` (identity's home sub) |
-| `managementGroupName` | `scope_management_group` | MG the runbook enumerates for `ManagementGroup` scope | `''` |
-| `createRgRoleAssignment` (bool) | `role_assignment_scope` | where the identity gets **Log Analytics Contributor** | RG-level grant |
-| `automationAccountName` | `automation_account_name` | Automation Account to create | `aa-law-retention` |
-| `runbookName` / `scheduleName` | `runbook_name` / `schedule_name` | resource names | sensible defaults |
-
-Two settings that must line up when you widen beyond one RG (details in [RBAC scope](#rbac-scope-where-the-identity-gets-log-analytics-contributor) and [Runbook scope](#runbook-scope-which-workspaces-it-configures)):
-
-- **`scopeMode` / `scope_mode`** = *what the runbook tries to touch*.
-- **`createRgRoleAssignment` / `role_assignment_scope`** = *what the identity is allowed to touch*.
-
-> Deploy-time values are stored as **Automation Variables**, so you can change them later without redeploying - see [Change settings later](#change-settings-later-no-redeploy).
 
 ## Pick your path
 
@@ -109,54 +81,38 @@ Run it once:
 ./scripts/Set-LawTableRetention.ps1 -ResourceGroupName <rg>
 ```
 
-Or run it on a schedule via an Automation runbook:
+Or run it on a schedule via an **Automation runbook**. Edit the parameter file for your tool first - the full parameter reference lives in each guide:
 
-> ⚠️ **Edit the parameter file for your tool first** - see [Configuration](#configuration). For **Bicep** edit `main.bicepparam`; for **Terraform** copy `terraform.tfvars.example` to `terraform.tfvars`. Left unchanged, they deploy with the author's lab values.
-
-**Bicep**
-
+**Bicep** ([full guide](automation/bicep/README.md))
 ```powershell
 az deployment group create -g <automation-rg> -f automation/bicep/main.bicep -p automation/bicep/main.bicepparam `
   -p runbookContentUri='https://raw.githubusercontent.com/claestom/law-retention-guardrails/main/automation/runbooks/Invoke-LawTableRetention.ps1'
 ```
 
-**Terraform**
+**Terraform** ([full guide](automation/terraform/README.md))
 ```powershell
 cd automation/terraform; cp terraform.tfvars.example terraform.tfvars   # edit values
 terraform init; terraform apply
 ```
 
-Both create an Automation Account (managed identity), the runbook, a weekly schedule, and the **Log Analytics Contributor** role on the target RG.
+Both deploy an Automation Account (system-assigned identity), the runbook, a weekly schedule, and a **Log Analytics Contributor** role assignment.
 
-### RBAC scope (where the identity gets Log Analytics Contributor)
+### Scope: two settings that must line up
 
-The identity is granted the role at the **target resource group** by default (`createRgRoleAssignment` / `role_assignment_scope`, see [Configuration](#configuration)). To cover more workspaces, widen it:
+| Setting | Controls | Where to set it |
+|---|---|---|
+| **Runbook scope** (`scopeMode` / `scope_mode`) | *what the runbook enumerates* | per-tool guide |
+| **RBAC scope** | *what the identity is allowed to touch* | per-tool guide |
 
-- **Terraform** - set `role_assignment_scope = "resource_group" | "subscription" | "management_group"` (plus `management_group_name` for the last). One `terraform apply` handles it.
-- **Bicep** - an RG deployment can't assign at a higher scope, so for subscription/MG set `createRgRoleAssignment=false` on `main.bicep`, then deploy the matching template with the identity's principal id (from the main deploy output):
-  ```powershell
-  # subscription scope
-  az deployment sub create -l <location> -f automation/bicep/roleAssignment.subscription.bicep -p principalId=<principalId>
-  # management group scope
-  az deployment mg create -m <mgId> -l <location> -f automation/bicep/roleAssignment.managementGroup.bicep -p principalId=<principalId>
-  ```
-  Broader scope also means the runbook can act on more workspaces - set `law-retention-resource-group` accordingly (and prefer least privilege).
+Runbook scope options:
 
-### Runbook scope (which workspaces it configures)
-
-RBAC alone doesn't widen *what the runbook touches* - set the **scope mode** too (`scopeMode` / `scope_mode`, see [Configuration](#configuration)):
-
-| `scope_mode` (TF) / `scopeMode` (Bicep) | Runbook enumerates |
+| Scope | Runbook enumerates |
 |---|---|
-| `ResourceGroup` (default) | workspaces in `law-retention-resource-group` |
-| `Subscription` | every workspace in **one** subscription - the Automation Account's own by default, or `law-retention-subscription` if set |
-| `ManagementGroup` | every workspace under `law-retention-management-group` (all child subscriptions) |
+| `ResourceGroup` (default) | workspaces in the target resource group |
+| `Subscription` | every workspace in one subscription (the identity's home sub, or a chosen one) |
+| `ManagementGroup` | every workspace under a management group (all child subscriptions) |
 
-At **deploy time** you pass this as a parameter; it's stored as the `law-retention-scope-mode` (and `law-retention-management-group` / `law-retention-subscription`) Automation Variables, so you can change it later without redeploying.
-
-> **Subscription scope** targets the managed identity's home subscription (where the Automation Account lives). Set `subscriptionId` (Bicep) / `scope_subscription_id` (TF) only to target a *different* subscription - the identity must then have Log Analytics Contributor there too.
-
-> For `Subscription` / `ManagementGroup` scope the runbook enumerates workspaces with **`Az.Resources`** (`Get-AzManagementGroup`) and **`Az.OperationalInsights`** - both ship with the Automation Account's default Az modules, so no extra module import is needed. The managed identity just needs **Log Analytics Contributor** at the subscription / management-group scope.
+> Widen **both** together, or writes fail where the identity lacks access. For `Subscription` / `ManagementGroup` the runbook enumerates with `Az.Resources` + `Az.OperationalInsights` (already in the Automation Account) - no extra module import needed.
 
 ## Change settings later (no redeploy)
 
