@@ -32,21 +32,39 @@ Then edit the files in the **⚠️ Configure these files first** block below be
 | `automation/terraform/terraform.tfvars.example` → copy to `terraform.tfvars` | `subscription_id`, `automation_resource_group_name`, `target_resource_group_name`, `schedule_start_time` (must be in the future) |
 | command args | every `<sub-id>`, `<rg>`, `<automation-rg>`, `<mgId>`, `<location>`, `<principalId>` placeholder |
 
-**🟡 Change only if you want that behaviour (otherwise the defaults are fine):**
-
-| Value | Default | Change when… |
-|---|---|---|
-| `analyticsRetentionInDays` / `analytics_retention_in_days` | `-1` (inherit workspace) | you want a fixed analytics retention |
-| `totalRetentionInDays` / `total_retention_in_days` | `730` | you want a different total retention |
-| `workspaceNameFilter` / `workspace_name_filter` | `''` (all workspaces) | you want to target one workspace |
-| `scopeMode` / `scope_mode` | `ResourceGroup` | you want `Subscription` or `ManagementGroup` scope |
-| `subscriptionId` / `scope_subscription_id` | `''` | `Subscription` scope **and** a sub other than the identity's home one |
-| `managementGroupName` / `scope_management_group` | `''` | `ManagementGroup` scope |
-| `createRgRoleAssignment` / `role_assignment_scope` | RG-level grant | you widen scope and grant at sub/MG level instead |
+**🟡 Everything else is optional** - retention values, scope, subscription/management-group and RBAC settings all have safe defaults. See the full **[Configuration](#configuration)** table for every parameter, its Bicep/Terraform name, default, and when to change it.
 
 **🟢 Safe as-is (a name for a resource the deployment creates - rename only if you prefer):** `automationAccountName` / `automation_account_name`, `runbookName`, `scheduleName`.
 
 </details>
+
+## Configuration
+
+Every deploy-time setting in one place. **Bicep** values go in [`automation/bicep/main.bicepparam`](automation/bicep/main.bicepparam); **Terraform** values in `terraform.tfvars` (copy from `terraform.tfvars.example`). Only the rows marked **required** must be changed - the rest have working defaults.
+
+| Bicep param | Terraform variable | What it sets | Default |
+|---|---|---|---|
+| `targetResourceGroupName` | `target_resource_group_name` | RG holding the workspaces (also the default RBAC + runbook scope) | lab value — **required** |
+| _(deployment `-g`)_ | `automation_resource_group_name` | RG that hosts the Automation Account | lab value — **required (TF)** |
+| _(deployment `--subscription`)_ | `subscription_id` | subscription to deploy into | lab value — **required (TF)** |
+| `runbookContentUri` | _(TF embeds the file)_ | raw URL Bicep pulls the runbook from | `''` → empty runbook; set the raw URL or upload after |
+| `scheduleStartTime` | `schedule_start_time` | first schedule run (RFC3339, must be future) | Bicep: now+2h · TF: **required** |
+| `analyticsRetentionInDays` | `analytics_retention_in_days` | analytics retention written to tables | `-1` (inherit workspace) |
+| `totalRetentionInDays` | `total_retention_in_days` | total (analytics + archive) retention | `730` |
+| `workspaceNameFilter` | `workspace_name_filter` | limit to a single workspace | `''` (all in scope) |
+| `scopeMode` | `scope_mode` | which workspaces the runbook enumerates: `ResourceGroup` \| `Subscription` \| `ManagementGroup` | `ResourceGroup` |
+| `subscriptionId` | `scope_subscription_id` | target sub for `Subscription` scope | `''` (identity's home sub) |
+| `managementGroupName` | `scope_management_group` | MG the runbook enumerates for `ManagementGroup` scope | `''` |
+| `createRgRoleAssignment` (bool) | `role_assignment_scope` | where the identity gets **Log Analytics Contributor** | RG-level grant |
+| `automationAccountName` | `automation_account_name` | Automation Account to create | `aa-law-retention` |
+| `runbookName` / `scheduleName` | `runbook_name` / `schedule_name` | resource names | sensible defaults |
+
+Two settings that must line up when you widen beyond one RG (details in [RBAC scope](#rbac-scope-where-the-identity-gets-log-analytics-contributor) and [Runbook scope](#runbook-scope-which-workspaces-it-configures)):
+
+- **`scopeMode` / `scope_mode`** = *what the runbook tries to touch*.
+- **`createRgRoleAssignment` / `role_assignment_scope`** = *what the identity is allowed to touch*.
+
+> Deploy-time values are stored as **Automation Variables**, so you can change them later without redeploying - see [Change settings later](#change-settings-later-no-redeploy).
 
 ## Pick your path
 
@@ -93,7 +111,7 @@ Run it once:
 
 Or run it on a schedule via an Automation runbook:
 
-> ⚠️ **Update the parameter file for the tool you choose before deploying.** For **Bicep** edit [`automation/bicep/main.bicepparam`](automation/bicep/main.bicepparam); for **Terraform** copy `terraform.tfvars.example` to `terraform.tfvars` and edit that. At minimum set your resource-group and Automation Account names; for wider scope also set the scope / subscription / management-group and role-assignment values (see [RBAC scope](#rbac-scope-where-the-identity-gets-log-analytics-contributor) below). Left unchanged, they deploy with the author's lab values.
+> ⚠️ **Edit the parameter file for your tool first** - see [Configuration](#configuration). For **Bicep** edit `main.bicepparam`; for **Terraform** copy `terraform.tfvars.example` to `terraform.tfvars`. Left unchanged, they deploy with the author's lab values.
 
 **Bicep**
 
@@ -112,7 +130,7 @@ Both create an Automation Account (managed identity), the runbook, a weekly sche
 
 ### RBAC scope (where the identity gets Log Analytics Contributor)
 
-Default is the **target resource group**. To cover more workspaces, widen the scope:
+The identity is granted the role at the **target resource group** by default (`createRgRoleAssignment` / `role_assignment_scope`, see [Configuration](#configuration)). To cover more workspaces, widen it:
 
 - **Terraform** - set `role_assignment_scope = "resource_group" | "subscription" | "management_group"` (plus `management_group_name` for the last). One `terraform apply` handles it.
 - **Bicep** - an RG deployment can't assign at a higher scope, so for subscription/MG set `createRgRoleAssignment=false` on `main.bicep`, then deploy the matching template with the identity's principal id (from the main deploy output):
@@ -126,7 +144,7 @@ Default is the **target resource group**. To cover more workspaces, widen the sc
 
 ### Runbook scope (which workspaces it configures)
 
-RBAC alone doesn't widen *what the runbook touches* - set the **scope mode** too:
+RBAC alone doesn't widen *what the runbook touches* - set the **scope mode** too (`scopeMode` / `scope_mode`, see [Configuration](#configuration)):
 
 | `scope_mode` (TF) / `scopeMode` (Bicep) | Runbook enumerates |
 |---|---|
