@@ -95,5 +95,5 @@ variable "role_assignment_scope" {
 variable "management_group_name" {
   type        = string
   default     = ""
-  description = "Management group name/id — required only when role_assignment_scope = management_group."
+  description = "Management group name/id - required only when role_assignment_scope = management_group."
 }

@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Azure Automation runbook — applies table-level retention (analytics + total) to
+    Azure Automation runbook - applies table-level retention (analytics + total) to
     every table in every Log Analytics workspace in the chosen scope.
 
 .DESCRIPTION

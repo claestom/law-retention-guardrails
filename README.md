@@ -1,8 +1,8 @@
 # Log Analytics Retention Guardrails
 
-Govern **Log Analytics data retention** — at the **workspace** level and per **table** — with Azure Policy for visibility and a script/runbook for configuration.
+Govern **Log Analytics data retention** - at the **workspace** level and per **table** - with Azure Policy for visibility and a script/runbook for configuration.
 
-> ⚠️ **Configure these files first — they ship with the author's lab values.** Subscription IDs, resource-group names, workspace names and the runbook URL in the files below all point at a demo environment. **Replace every placeholder with your own values before deploying**, or the commands will target the wrong (or a non-existent) tenant.
+> ⚠️ **Configure these files first - they ship with the author's lab values.** Subscription IDs, resource-group names, workspace names and the runbook URL in the files below all point at a demo environment. **Replace every placeholder with your own values before deploying**, or the commands will target the wrong (or a non-existent) tenant.
 
 ## Prerequisites
 
@@ -23,12 +23,12 @@ Then edit the files in the **⚠️ Configure these files first** block below be
 
 **Not everything needs changing.** Only the values that point at a specific environment are mandatory. The retention numbers, scope defaults, and empty filters below are safe to leave as-is.
 
-**🔴 Must change (environment-specific — these hold the author's lab values):**
+**🔴 Must change (environment-specific - these hold the author's lab values):**
 
 | File | Value |
 |---|---|
 | `deploy.ps1` | `-SubscriptionId` you pass in / the guardrail sub id inside the script |
-| `automation/bicep/main.bicepparam` | `targetResourceGroupName`; `runbookContentUri` (your repo's raw URL — unless you upload the runbook after deploy) |
+| `automation/bicep/main.bicepparam` | `targetResourceGroupName`; `runbookContentUri` (your repo's raw URL - unless you upload the runbook after deploy) |
 | `automation/terraform/terraform.tfvars.example` → copy to `terraform.tfvars` | `subscription_id`, `automation_resource_group_name`, `target_resource_group_name`, `schedule_start_time` (must be in the future) |
 | command args | every `<sub-id>`, `<rg>`, `<automation-rg>`, `<mgId>`, `<location>`, `<principalId>` placeholder |
 
@@ -44,7 +44,7 @@ Then edit the files in the **⚠️ Configure these files first** block below be
 | `managementGroupName` / `scope_management_group` | `''` | `ManagementGroup` scope |
 | `createRgRoleAssignment` / `role_assignment_scope` | RG-level grant | you widen scope and grant at sub/MG level instead |
 
-**🟢 Safe as-is (a name for a resource the deployment creates — rename only if you prefer):** `automationAccountName` / `automation_account_name`, `runbookName`, `scheduleName`.
+**🟢 Safe as-is (a name for a resource the deployment creates - rename only if you prefer):** `automationAccountName` / `automation_account_name`, `runbookName`, `scheduleName`.
 
 </details>
 
@@ -66,11 +66,11 @@ Each table has **two** retention settings (the same ones you see in the portal's
 | **Analytics retention** | how long data stays "hot" and interactively queryable | `4`–`730` days, or **`-1`** |
 | **Total retention** | analytics **+** long-term (archive) storage; must be ≥ analytics | `4`–`730` / `1095…4383` days, or **`-1`** |
 
-**`-1` = "Same as workspace settings"** — the table inherits the workspace's default retention instead of a fixed number. It's the default dropdown option in the portal. Use a number to pin a table; use `-1` to let it follow the workspace.
+**`-1` = "Same as workspace settings"** - the table inherits the workspace's default retention instead of a fixed number. It's the default dropdown option in the portal. Use a number to pin a table; use `-1` to let it follow the workspace.
 
 The **workspace** retention (set by the workspace policy) is the default that every `-1` table inherits.
 
-> ⚠️ **Basic / Auxiliary Logs tables always report non-compliant.** These plans have a fixed analytics retention (30 days) that can't be changed, so they can never match the target analytics value. This is expected — treat those results as noise, or exclude those tables via a policy exemption.
+> ⚠️ **Basic / Auxiliary Logs tables always report non-compliant.** These plans have a fixed analytics retention (30 days) that can't be changed, so they can never match the target analytics value. This is expected - treat those results as noise, or exclude those tables via a policy exemption.
 
 ## 1. Deploy the policies
 
@@ -81,13 +81,13 @@ Creates the workspace + table retention policy definitions and the initiative. A
 
 ## 2. Set table retention (separate script)
 
-**Why a script instead of the policy?** A workspace exposes *every* built-in table as a resource — often 800–1500, most of them empty. A DeployIfNotExists policy would queue **one remediation deployment per table, per workspace** (slow, noisy, throttling-prone). The script loops tables directly, is **idempotent** (skips tables already correct), and lets you target exactly what you want. So: use the **policy to audit**, and this **script to configure**.
+**Why a script instead of the policy?** A workspace exposes *every* built-in table as a resource - often 800-1500, most of them empty. A DeployIfNotExists policy would queue **one remediation deployment per table, per workspace** (slow, noisy, throttling-prone). The script loops tables directly, is **idempotent** (skips tables already correct), and lets you target exactly what you want. So: use the **policy to audit**, and this **script to configure**.
 
 Run it once:
 ```powershell
 # preview (no changes)
 ./scripts/Set-LawTableRetention.ps1 -ResourceGroupName <rg> -WhatIf
-# apply — analytics inherits workspace (-1), total = 730 days
+# apply - analytics inherits workspace (-1), total = 730 days
 ./scripts/Set-LawTableRetention.ps1 -ResourceGroupName <rg>
 ```
 
@@ -111,31 +111,31 @@ Both create an Automation Account (managed identity), the runbook, a weekly sche
 
 Default is the **target resource group**. To cover more workspaces, widen the scope:
 
-- **Terraform** — set `role_assignment_scope = "resource_group" | "subscription" | "management_group"` (plus `management_group_name` for the last). One `terraform apply` handles it.
-- **Bicep** — an RG deployment can't assign at a higher scope, so for subscription/MG set `createRgRoleAssignment=false` on `main.bicep`, then deploy the matching template with the identity's principal id (from the main deploy output):
+- **Terraform** - set `role_assignment_scope = "resource_group" | "subscription" | "management_group"` (plus `management_group_name` for the last). One `terraform apply` handles it.
+- **Bicep** - an RG deployment can't assign at a higher scope, so for subscription/MG set `createRgRoleAssignment=false` on `main.bicep`, then deploy the matching template with the identity's principal id (from the main deploy output):
   ```powershell
   # subscription scope
   az deployment sub create -l <location> -f automation/bicep/roleAssignment.subscription.bicep -p principalId=<principalId>
   # management group scope
   az deployment mg create -m <mgId> -l <location> -f automation/bicep/roleAssignment.managementGroup.bicep -p principalId=<principalId>
   ```
-  Broader scope also means the runbook can act on more workspaces — set `law-retention-resource-group` accordingly (and prefer least privilege).
+  Broader scope also means the runbook can act on more workspaces - set `law-retention-resource-group` accordingly (and prefer least privilege).
 
 ### Runbook scope (which workspaces it configures)
 
-RBAC alone doesn't widen *what the runbook touches* — set the **scope mode** too:
+RBAC alone doesn't widen *what the runbook touches* - set the **scope mode** too:
 
 | `scope_mode` (TF) / `scopeMode` (Bicep) | Runbook enumerates |
 |---|---|
 | `ResourceGroup` (default) | workspaces in `law-retention-resource-group` |
-| `Subscription` | every workspace in **one** subscription — the Automation Account's own by default, or `law-retention-subscription` if set |
+| `Subscription` | every workspace in **one** subscription - the Automation Account's own by default, or `law-retention-subscription` if set |
 | `ManagementGroup` | every workspace under `law-retention-management-group` (all child subscriptions) |
 
 At **deploy time** you pass this as a parameter; it's stored as the `law-retention-scope-mode` (and `law-retention-management-group` / `law-retention-subscription`) Automation Variables, so you can change it later without redeploying.
 
-> **Subscription scope** targets the managed identity's home subscription (where the Automation Account lives). Set `subscriptionId` (Bicep) / `scope_subscription_id` (TF) only to target a *different* subscription — the identity must then have Log Analytics Contributor there too.
+> **Subscription scope** targets the managed identity's home subscription (where the Automation Account lives). Set `subscriptionId` (Bicep) / `scope_subscription_id` (TF) only to target a *different* subscription - the identity must then have Log Analytics Contributor there too.
 
-> For `Subscription` / `ManagementGroup` scope the runbook enumerates workspaces with **`Az.Resources`** (`Get-AzManagementGroup`) and **`Az.OperationalInsights`** — both ship with the Automation Account's default Az modules, so no extra module import is needed. The managed identity just needs **Log Analytics Contributor** at the subscription / management-group scope.
+> For `Subscription` / `ManagementGroup` scope the runbook enumerates workspaces with **`Az.Resources`** (`Get-AzManagementGroup`) and **`Az.OperationalInsights`** - both ship with the Automation Account's default Az modules, so no extra module import is needed. The managed identity just needs **Log Analytics Contributor** at the subscription / management-group scope.
 
 ## Change settings later (no redeploy)
 
