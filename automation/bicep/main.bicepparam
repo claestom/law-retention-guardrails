@@ -26,7 +26,7 @@ param managementGroupName = ''
 // Keep true ONLY for ResourceGroup scope. For Subscription / ManagementGroup
 // scope, set false and grant the identity via roleAssignment.subscription.bicep /
 // roleAssignment.managementGroup.bicep at that broader scope instead.
-param createRgRoleAssignment = true
+param createRgRoleAssignment = false
 
 // ---- Runbook content -------------------------------------------------------
 // Leave empty to create an EMPTY runbook, then upload content after deployment
