@@ -65,6 +65,19 @@ function Get-Prop([string]$path, [string]$name) {
     return (Get-Content $path -Raw | ConvertFrom-Json).properties.$name
 }
 
+# ---- Helper: write a JSON blob to a temp file and return an az '@file' arg ---
+# Passing large JSON inline to `az ... --rules {json}` makes the CLI treat it as
+# "shorthand syntax" and choke on the ' characters in [parameters('...')]. Reading
+# from a file (@path) bypasses that parser entirely.
+$script:TempJsonFiles = @()
+function New-JsonArg {
+    param($Object)
+    $tmp = [System.IO.Path]::GetTempFileName()
+    ($Object | ConvertTo-Json -Depth 100) | Set-Content -LiteralPath $tmp -Encoding utf8
+    $script:TempJsonFiles += $tmp
+    return "@$tmp"
+}
+
 # ---- 1) Workspace-level policy definition ---------------------------------
 $wsName = "configure-law-workspace-retention"
 Write-Host "Creating/updating policy definition: $wsName" -ForegroundColor Green
@@ -75,8 +88,8 @@ az policy definition create `
     --description  $wsJson.properties.description `
     --mode         $wsJson.properties.mode `
     --metadata     "category=Monitoring" `
-    --rules   (($wsJson.properties.policyRule)  | ConvertTo-Json -Depth 100 -Compress) `
-    --params  (($wsJson.properties.parameters)  | ConvertTo-Json -Depth 100 -Compress) `
+    --rules   (New-JsonArg $wsJson.properties.policyRule) `
+    --params  (New-JsonArg $wsJson.properties.parameters) `
     @scopeArgs | Out-Null
 
 # ---- 2) Table-level policy definition -------------------------------------
@@ -89,8 +102,8 @@ az policy definition create `
     --description  $tblJson.properties.description `
     --mode         $tblJson.properties.mode `
     --metadata     "category=Monitoring" `
-    --rules   (($tblJson.properties.policyRule) | ConvertTo-Json -Depth 100 -Compress) `
-    --params  (($tblJson.properties.parameters) | ConvertTo-Json -Depth 100 -Compress) `
+    --rules   (New-JsonArg $tblJson.properties.policyRule) `
+    --params  (New-JsonArg $tblJson.properties.parameters) `
     @scopeArgs | Out-Null
 
 # ---- Resolve the definition resource IDs ----------------------------------
@@ -107,15 +120,18 @@ $setRaw = (Get-Content $setFile -Raw) `
     -replace "__TABLE_DEF_ID__",     $tblDefId
 $setJson = $setRaw | ConvertFrom-Json
 
-az policy set-definition create `
-    --name $setName `
-    --display-name $setJson.properties.displayName `
-    --description  $setJson.properties.description `
-    --metadata     "category=Monitoring" `
-    --definitions  (($setJson.properties.policyDefinitions)      | ConvertTo-Json -Depth 100 -Compress) `
-    --params       (($setJson.properties.parameters)            | ConvertTo-Json -Depth 100 -Compress) `
-    --definition-groups (($setJson.properties.policyDefinitionGroups) | ConvertTo-Json -Depth 100 -Compress) `
-    @scopeArgs | Out-Null
+$setArgs = @(
+    "--name", $setName,
+    "--display-name", $setJson.properties.displayName,
+    "--description",  $setJson.properties.description,
+    "--metadata",     "category=Monitoring",
+    "--definitions",  (New-JsonArg $setJson.properties.policyDefinitions),
+    "--params",       (New-JsonArg $setJson.properties.parameters)
+)
+if ($setJson.properties.policyDefinitionGroups) {
+    $setArgs += @("--definition-groups", (New-JsonArg $setJson.properties.policyDefinitionGroups))
+}
+az policy set-definition create @setArgs @scopeArgs | Out-Null
 
 $setId = az policy set-definition show --name $setName @scopeArgs --query id -o tsv
 Write-Host ""
@@ -131,3 +147,6 @@ Write-Host "    --mi-system-assigned --location westeurope ``"
 Write-Host "    -p '{\"workspaceRetentionInDays\":{\"value\":90},\"tableRetentionInDays\":{\"value\":-1},\"tableTotalRetentionInDays\":{\"value\":-1}}'"
 Write-Host ""
 Write-Host "For DeployIfNotExists remediation, grant the assignment identity the 'Log Analytics Contributor' role, then create a remediation task." -ForegroundColor Yellow
+
+# ---- Cleanup temp JSON files ----------------------------------------------
+foreach ($t in $script:TempJsonFiles) { Remove-Item -LiteralPath $t -ErrorAction SilentlyContinue }
