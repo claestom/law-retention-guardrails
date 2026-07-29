@@ -4,8 +4,9 @@
     Log Analytics workspace in a resource group.
 
 .DESCRIPTION
-    Loops over all Log Analytics workspaces in the given resource group and, for
-    each table, sets:
+    Sequential (single-threaded) variant of Set-LawTableRetention.ps1, kept for
+    performance comparison. Loops over all Log Analytics workspaces in the given
+    scope and, for each table, sets:
       - Analytics retention (RetentionInDays)
       - Total retention     (TotalRetentionInDays)
 
@@ -17,10 +18,8 @@
     Auxiliary plan tables, or transient *_SRCH / *_RST tables) are caught and
     reported rather than failing the run.
 
-    Within each workspace the table updates are applied in parallel
-    (ForEach-Object -Parallel) to cut runtime on workspaces with hundreds of
-    tables. Use -ThrottleLimit to tune concurrency. Workspaces are still
-    processed one at a time so per-subscription context switching stays safe.
+    Table updates are applied one at a time (no parallelism). Elapsed time is
+    printed at the end so you can compare against the parallel version.
 
     Supports -WhatIf to preview changes without applying them.
 
@@ -43,15 +42,11 @@
     Subscription scope this also selects which subscription's workspaces are
     enumerated; omit to use the current context subscription.
 
-.PARAMETER ThrottleLimit
-    Maximum number of table updates to run concurrently per workspace.
-    Default: 10. Lower it if you hit Log Analytics throttling (429) responses.
+.EXAMPLE
+    ./Set-LawTableRetention.Sequential.ps1 -ResourceGroupName rg-azure-monitor-lab -WhatIf
 
 .EXAMPLE
-    ./Set-LawTableRetention.ps1 -ResourceGroupName rg-azure-monitor-lab -WhatIf
-
-.EXAMPLE
-    ./Set-LawTableRetention.ps1 -ResourceGroupName rg-azure-monitor-lab -TotalRetentionInDays 730
+    ./Set-LawTableRetention.Sequential.ps1 -ResourceGroupName rg-azure-monitor-lab -TotalRetentionInDays 730
 
 .NOTES
     Requires the Az.OperationalInsights module and an authenticated Az session
@@ -74,9 +69,7 @@ param(
 
     [string] $WorkspaceName,
 
-    [string] $SubscriptionId,
-
-    [int] $ThrottleLimit = 10
+    [string] $SubscriptionId
 )
 
 $ErrorActionPreference = 'Stop'
@@ -165,8 +158,6 @@ foreach ($ws in $targets) {
     Write-Host ("=== [{0}] {1}/{2} ===" -f $ws.SubscriptionId, $ws.ResourceGroupName, $ws.Name) -ForegroundColor Green
     $tables = Get-AzOperationalInsightsTable -ResourceGroupName $ws.ResourceGroupName -WorkspaceName $ws.Name
 
-    # Classify tables first (cheap, in-memory); only the actual updates hit the API.
-    $toUpdate = [System.Collections.Generic.List[object]]::new()
     foreach ($table in $tables) {
         $name = $table.Name
 
@@ -179,49 +170,26 @@ foreach ($ws in $targets) {
         }
 
         if ($PSCmdlet.ShouldProcess("$($ws.Name)/$name", "Set retention analytics=$RetentionInDays total=$TotalRetentionInDays")) {
-            $toUpdate.Add($table)
+            try {
+                $params = @{
+                    ResourceGroupName    = $ws.ResourceGroupName
+                    WorkspaceName        = $ws.Name
+                    TableName            = $name
+                    RetentionInDays      = $RetentionInDays
+                    TotalRetentionInDays = $TotalRetentionInDays
+                    ErrorAction          = 'Stop'
+                }
+                Update-AzOperationalInsightsTable @params | Out-Null
+                Write-Host ("  [updated] {0}" -f $name) -ForegroundColor Yellow
+                $results.Add([pscustomobject]@{ Workspace = $ws.Name; Table = $name; Status = 'Updated' })
+            }
+            catch {
+                Write-Host ("  [skipped] {0} -> {1}" -f $name, $_.Exception.Message) -ForegroundColor DarkGray
+                $results.Add([pscustomobject]@{ Workspace = $ws.Name; Table = $name; Status = "Failed: $($_.Exception.Message)" })
+            }
         }
         else {
             $results.Add([pscustomobject]@{ Workspace = $ws.Name; Table = $name; Status = 'WhatIf (would update)' })
-        }
-    }
-
-    # Apply this workspace's updates in parallel. The Az context is pinned via
-    # -DefaultProfile so each worker runspace authenticates against the right
-    # subscription without relying on the (process-global) current context.
-    if ($toUpdate.Count -gt 0) {
-        $wsCtx  = Get-AzContext
-        $wsRg   = $ws.ResourceGroupName
-        $wsName = $ws.Name
-
-        $updated = $toUpdate | ForEach-Object -ThrottleLimit $ThrottleLimit -Parallel {
-            $table = $_
-            $p = @{
-                ResourceGroupName    = $using:wsRg
-                WorkspaceName        = $using:wsName
-                TableName            = $table.Name
-                RetentionInDays      = $using:RetentionInDays
-                TotalRetentionInDays = $using:TotalRetentionInDays
-                DefaultProfile       = $using:wsCtx
-                ErrorAction          = 'Stop'
-            }
-            try {
-                Update-AzOperationalInsightsTable @p | Out-Null
-                [pscustomobject]@{ Workspace = $using:wsName; Table = $table.Name; Status = 'Updated' }
-            }
-            catch {
-                [pscustomobject]@{ Workspace = $using:wsName; Table = $table.Name; Status = "Failed: $($_.Exception.Message)" }
-            }
-        }
-
-        foreach ($u in $updated) {
-            if ($u.Status -eq 'Updated') {
-                Write-Host ("  [updated] {0}" -f $u.Table) -ForegroundColor Yellow
-            }
-            else {
-                Write-Host ("  [skipped] {0} -> {1}" -f $u.Table, ($u.Status -replace '^Failed: ', '')) -ForegroundColor DarkGray
-            }
-            $results.Add($u)
         }
     }
 }
@@ -236,7 +204,7 @@ Write-Host ("  {0,-45} {1}" -f 'TOTAL tables processed', $results.Count)
 
 $sw.Stop()
 Write-Host ""
-Write-Host ("Elapsed time : {0:hh\:mm\:ss\.fff}  (mode: parallel, ThrottleLimit={1})" -f $sw.Elapsed, $ThrottleLimit) -ForegroundColor Magenta
+Write-Host ("Elapsed time : {0:hh\:mm\:ss\.fff}  (mode: sequential)" -f $sw.Elapsed) -ForegroundColor Magenta
 
 # Emit the detailed results to the pipeline for further processing/export.
 $results
