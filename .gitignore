@@ -14,3 +14,6 @@ crash.log
 # OS / editor
 .DS_Store
 Thumbs.db
+
+# Local-only perf-comparison script (kept out of the repo)
+scripts/Set-LawTableRetention.Sequential.ps1
