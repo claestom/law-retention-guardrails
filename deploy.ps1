@@ -138,13 +138,16 @@ Write-Host ""
 Write-Host "Initiative created: $setId" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Next step - assign it (example, DeployIfNotExists needs a managed identity + location):" -ForegroundColor Yellow
+Write-Host "  # write the parameter values to a file (avoids the shell mangling inline JSON quotes)"
+Write-Host "  '{\"workspaceRetentionInDays\":{\"value\":90},\"tableRetentionInDays\":{\"value\":-1},\"tableTotalRetentionInDays\":{\"value\":-1}}' | Set-Content params.json -Encoding utf8"
+Write-Host ""
 Write-Host "  az policy assignment create ``"
 Write-Host "    --name law-retention ``"
 Write-Host "    --display-name 'Configure Log Analytics data retention' ``"
 Write-Host "    --policy-set-definition $setId ``"
 Write-Host "    --scope /subscriptions/$SubscriptionId ``"
 Write-Host "    --mi-system-assigned --location westeurope ``"
-Write-Host "    -p '{\"workspaceRetentionInDays\":{\"value\":90},\"tableRetentionInDays\":{\"value\":-1},\"tableTotalRetentionInDays\":{\"value\":-1}}'"
+Write-Host "    --params '@params.json'"
 Write-Host ""
 Write-Host "For DeployIfNotExists remediation, grant the assignment identity the 'Log Analytics Contributor' role, then create a remediation task." -ForegroundColor Yellow
 
