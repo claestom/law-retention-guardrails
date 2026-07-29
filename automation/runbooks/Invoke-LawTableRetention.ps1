@@ -71,6 +71,19 @@ $ret    = [int](Resolve-Config -ParamValue $RetentionInDays      -VariableName '
 $total  = [int](Resolve-Config -ParamValue $TotalRetentionInDays -VariableName 'law-retention-total-days')
 $wsRetRaw  = Resolve-Config -ParamValue $WorkspaceRetentionInDays -VariableName 'law-retention-workspace-days' -Optional
 $wsRetDays = [string]::IsNullOrWhiteSpace($wsRetRaw) ? -1 : [int]$wsRetRaw
+
+# ---- Validate retention values (fail fast with a clear message) -------------
+$allowedTotal = @(-1) + (4..730) + @(1095, 1460, 1826, 2191, 2556, 2922, 3288, 3653, 4018, 4383)
+if ($ret -ne -1 -and ($ret -lt 4 -or $ret -gt 730)) {
+    throw "law-retention-analytics-days must be -1 or 4-730 (got $ret)."
+}
+if ($total -notin $allowedTotal) {
+    throw "law-retention-total-days must be -1, 4-730, or a full-year value (1095, 1460, 1826, 2191, 2556, 2922, 3288, 3653, 4018, 4383); got $total."
+}
+if ($wsRetDays -gt 0 -and ($wsRetDays -lt 30 -or $wsRetDays -gt 730)) {
+    throw "law-retention-workspace-days must be 30-730 (got $wsRetDays)."
+}
+
 $mgName = Resolve-Config -ParamValue $ManagementGroupName  -VariableName 'law-retention-management-group' -Optional
 $subId  = Resolve-Config -ParamValue $SubscriptionId       -VariableName 'law-retention-subscription' -Optional
 $scopeMode = Resolve-Config -ParamValue $Scope            -VariableName 'law-retention-scope-mode' -Optional

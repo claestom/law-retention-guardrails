@@ -73,10 +73,23 @@ param(
 
     [string] $ManagementGroupName,
 
+    [ValidateScript({
+            if ($_ -eq -1 -or ($_ -ge 4 -and $_ -le 730)) { return $true }
+            throw 'RetentionInDays must be -1 (inherit) or an integer 4-730.'
+        })]
     [int] $RetentionInDays = -1,
 
+    [ValidateScript({
+            $ok = @(-1) + (4..730) + @(1095, 1460, 1826, 2191, 2556, 2922, 3288, 3653, 4018, 4383)
+            if ($_ -in $ok) { return $true }
+            throw 'TotalRetentionInDays must be -1 (inherit), an integer 4-730, or a full-year value: 1095, 1460, 1826, 2191, 2556, 2922, 3288, 3653, 4018, 4383.'
+        })]
     [int] $TotalRetentionInDays = 730,
 
+    [ValidateScript({
+            if ($_ -le 0 -or ($_ -ge 30 -and $_ -le 730)) { return $true }
+            throw 'WorkspaceRetentionInDays must be -1/0 (unchanged) or an integer 30-730.'
+        })]
     [int] $WorkspaceRetentionInDays = -1,
 
     [string] $WorkspaceName,
