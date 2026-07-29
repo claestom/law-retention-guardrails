@@ -5,12 +5,10 @@
       "type": "String",
       "metadata": {
         "displayName": "Effect",
-        "description": "The policy effect. Audit reports tables with a non-matching retention, Deny blocks writes that would set a non-matching retention, and DeployIfNotExists remediates the retention to the specified values. Note: Deny evaluates the incoming request, which does not include the computed 'as default' flags, so prefer Audit or DeployIfNotExists when using the -1 ('Same as workspace settings') option."
+        "description": "The policy effect. Only Audit is supported: it reports tables whose retention does not match the specified values without changing anything."
       },
       "allowedValues": [
-        "Audit",
-        "Deny",
-        "DeployIfNotExists"
+        "Audit"
       ],
       "defaultValue": "Audit"
     },
@@ -87,100 +85,7 @@
       ]
     },
     "then": {
-      "effect": "[parameters('effect')]",
-      "details": {
-        "type": "Microsoft.OperationalInsights/workspaces/tables",
-        "name": "[field('fullName')]",
-        "roleDefinitionIds": [
-          "/providers/Microsoft.Authorization/roleDefinitions/92aaf0da-9dab-42b6-94a3-d43ce8d16293"
-        ],
-        "existenceCondition": {
-          "allOf": [
-            {
-              "anyOf": [
-                {
-                  "allOf": [
-                    {
-                      "value": "[parameters('tableRetentionInDays')]",
-                      "equals": -1
-                    },
-                    {
-                      "field": "Microsoft.OperationalInsights/workspaces/tables/retentionInDaysAsDefault",
-                      "equals": true
-                    }
-                  ]
-                },
-                {
-                  "field": "Microsoft.OperationalInsights/workspaces/tables/retentionInDays",
-                  "equals": "[parameters('tableRetentionInDays')]"
-                }
-              ]
-            },
-            {
-              "anyOf": [
-                {
-                  "allOf": [
-                    {
-                      "value": "[parameters('tableTotalRetentionInDays')]",
-                      "equals": -1
-                    },
-                    {
-                      "field": "Microsoft.OperationalInsights/workspaces/tables/totalRetentionInDaysAsDefault",
-                      "equals": true
-                    }
-                  ]
-                },
-                {
-                  "field": "Microsoft.OperationalInsights/workspaces/tables/totalRetentionInDays",
-                  "equals": "[parameters('tableTotalRetentionInDays')]"
-                }
-              ]
-            }
-          ]
-        },
-        "deployment": {
-          "properties": {
-            "mode": "incremental",
-            "parameters": {
-              "tableFullName": {
-                "value": "[field('fullName')]"
-              },
-              "tableRetentionInDays": {
-                "value": "[parameters('tableRetentionInDays')]"
-              },
-              "tableTotalRetentionInDays": {
-                "value": "[parameters('tableTotalRetentionInDays')]"
-              }
-            },
-            "template": {
-              "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-              "contentVersion": "1.0.0.0",
-              "parameters": {
-                "tableFullName": {
-                  "type": "string"
-                },
-                "tableRetentionInDays": {
-                  "type": "int"
-                },
-                "tableTotalRetentionInDays": {
-                  "type": "int"
-                }
-              },
-              "resources": [
-                {
-                  "type": "Microsoft.OperationalInsights/workspaces/tables",
-                  "apiVersion": "2025-07-01",
-                  "name": "[parameters('tableFullName')]",
-                  "properties": {
-                    "retentionInDays": "[if(equals(parameters('tableRetentionInDays'), -1), json('null'), parameters('tableRetentionInDays'))]",
-                    "totalRetentionInDays": "[if(equals(parameters('tableTotalRetentionInDays'), -1), json('null'), parameters('tableTotalRetentionInDays'))]"
-                  }
-                }
-              ]
-            }
-          }
-        }
-      }
+      "effect": "[parameters('effect')]"
     }
   }
 }

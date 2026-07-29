@@ -137,19 +137,18 @@ $setId = az policy set-definition show --name $setName @scopeArgs --query id -o 
 Write-Host ""
 Write-Host "Initiative created: $setId" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Next step - assign it (example, DeployIfNotExists needs a managed identity + location):" -ForegroundColor Yellow
+Write-Host "Next step - assign it (Audit only; no managed identity needed):" -ForegroundColor Yellow
 Write-Host "  # write the parameter values to a file (avoids the shell mangling inline JSON quotes)"
 Write-Host "  '{\"workspaceRetentionInDays\":{\"value\":90},\"tableRetentionInDays\":{\"value\":-1},\"tableTotalRetentionInDays\":{\"value\":-1}}' | Set-Content params.json -Encoding utf8"
 Write-Host ""
 Write-Host "  az policy assignment create ``"
 Write-Host "    --name law-retention ``"
-Write-Host "    --display-name 'Configure Log Analytics data retention' ``"
+Write-Host "    --display-name 'Audit Log Analytics data retention' ``"
 Write-Host "    --policy-set-definition $setId ``"
 Write-Host "    --scope /subscriptions/$SubscriptionId ``"
-Write-Host "    --mi-system-assigned --location westeurope ``"
 Write-Host "    --params '@params.json'"
 Write-Host ""
-Write-Host "For DeployIfNotExists remediation, grant the assignment identity the 'Log Analytics Contributor' role, then create a remediation task." -ForegroundColor Yellow
+Write-Host "The initiative is Audit only - it reports drift. Table retention is configured by the Automation runbook, workspace retention by the portal or script." -ForegroundColor Yellow
 
 # ---- Cleanup temp JSON files ----------------------------------------------
 foreach ($t in $script:TempJsonFiles) { Remove-Item -LiteralPath $t -ErrorAction SilentlyContinue }
