@@ -94,6 +94,9 @@ Run it once:
 Or run it on a schedule via an Automation runbook:
 
 **Bicep**
+
+> ⚠️ **Edit [`automation/bicep/main.bicepparam`](automation/bicep/main.bicepparam) first.** At minimum set `targetResourceGroupName` (the RG holding your workspaces) and `automationAccountName`. For wider scope also set `scopeMode`, `subscriptionId` / `managementGroupName`, and `createRgRoleAssignment` (see [RBAC scope](#rbac-scope-where-the-identity-gets-log-analytics-contributor) below). Left unchanged, it deploys with the author's lab values.
+
 ```powershell
 az deployment group create -g <automation-rg> -f automation/bicep/main.bicep -p automation/bicep/main.bicepparam `
   -p runbookContentUri='https://raw.githubusercontent.com/claestom/law-retention-guardrails/main/automation/runbooks/Invoke-LawTableRetention.ps1'
