@@ -2,7 +2,7 @@
 
 Govern **Log Analytics data retention** - at the **workspace** level and per **table** - with Azure Policy for visibility and a script/runbook for configuration.
 
-> ⚠️ **Configure these files first - they ship with the author's lab values.** Subscription IDs, resource-group names, workspace names and the runbook URL in the files below all point at a demo environment. **Replace every placeholder with your own values before deploying**, or the commands will target the wrong (or a non-existent) tenant.
+> ⚠️ **Configure these files first - they ship with the author's lab values.** The **subscription IDs** and **resource-group names** in `deploy.ps1`, `main.bicepparam` and `terraform.tfvars` point at a demo environment - **replace them with your own before deploying**, or the commands will target the wrong (or a non-existent) tenant. *(The runbook URL points at this repo and works as-is - only change it if you fork.)*
 
 ## Prerequisites
 
@@ -19,22 +19,16 @@ cd law-retention-guardrails
 Then edit the files in the **⚠️ Configure these files first** block below before running any command below.
 
 <details>
-<summary><b>Files to edit before deploying</b> (click to expand)</summary>
+<summary><b>Files that ship with lab values</b> (click to expand)</summary>
 
-**Not everything needs changing.** Only the values that point at a specific environment are mandatory. The retention numbers, scope defaults, and empty filters below are safe to leave as-is.
+Replace these before deploying. Every other parameter (retention, scope, RBAC) is optional with a safe default - full lists are in the per-tool guides: **[Bicep](automation/bicep/README.md)** · **[Terraform](automation/terraform/README.md)**.
 
-**🔴 Must change (environment-specific - these hold the author's lab values):**
-
-| File | Value |
+| File | Replace |
 |---|---|
-| `deploy.ps1` | `-SubscriptionId` you pass in / the guardrail sub id inside the script |
-| `automation/bicep/main.bicepparam` | `targetResourceGroupName`; `runbookContentUri` (your repo's raw URL - unless you upload the runbook after deploy) |
-| `automation/terraform/terraform.tfvars.example` → copy to `terraform.tfvars` | `subscription_id`, `automation_resource_group_name`, `target_resource_group_name`, `schedule_start_time` (must be in the future) |
-| command args | every `<sub-id>`, `<rg>`, `<automation-rg>`, `<mgId>`, `<location>`, `<principalId>` placeholder |
-
-**🟡 Everything else is optional** - retention values, scope, subscription/management-group and RBAC settings all have safe defaults. Full parameter lists live in the per-tool guides: **[Bicep](automation/bicep/README.md)** · **[Terraform](automation/terraform/README.md)**.
-
-**🟢 Safe as-is (a name for a resource the deployment creates - rename only if you prefer):** `automationAccountName` / `automation_account_name`, `runbookName`, `scheduleName`.
+| `deploy.ps1` | `-SubscriptionId` / the guardrail sub id inside the script |
+| `automation/bicep/main.bicepparam` | `targetResourceGroupName` |
+| `automation/terraform/terraform.tfvars` (copy from `.example`) | `subscription_id`, `automation_resource_group_name`, `target_resource_group_name`, `schedule_start_time` |
+| command args | every `<sub-id>`, `<rg>`, `<automation-rg>`, `<mgId>`, `<location>`, `<principalId>` |
 
 </details>
 
@@ -81,7 +75,7 @@ Run it once:
 ./scripts/Set-LawTableRetention.ps1 -ResourceGroupName <rg>
 ```
 
-Or run it on a schedule via an **Automation runbook**. Edit the parameter file for your tool first - the full parameter reference lives in each guide:
+Or run it on a schedule via an **Automation runbook** - each guide has the full parameter list:
 
 **Bicep** ([full guide](automation/bicep/README.md))
 ```powershell
