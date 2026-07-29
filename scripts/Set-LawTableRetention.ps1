@@ -35,6 +35,11 @@
     Desired total retention in days (analytics + long-term). Use -1 to inherit
     the workspace default (no long-term retention). Default: 730.
 
+.PARAMETER WorkspaceRetentionInDays
+    Optional. When greater than 0, also sets the workspace-level default analytics
+    retention (Set-AzOperationalInsightsWorkspace) for each workspace in scope.
+    Valid range is 30-730. Default -1 leaves the workspace default unchanged.
+
 .PARAMETER WorkspaceName
     Optional. Restrict to a single workspace in the resource group.
 
@@ -72,6 +77,8 @@ param(
 
     [int] $TotalRetentionInDays = 730,
 
+    [int] $WorkspaceRetentionInDays = -1,
+
     [string] $WorkspaceName,
 
     [string] $SubscriptionId,
@@ -96,6 +103,8 @@ if ($SubscriptionId) {
 Write-Host ("Subscription : {0} ({1})" -f (Get-AzContext).Subscription.Name, (Get-AzContext).Subscription.Id) -ForegroundColor Cyan
 Write-Host ("Scope        : {0}" -f $Scope) -ForegroundColor Cyan
 Write-Host ("Target retention : analytics={0}  total={1}  (-1 = same as workspace)" -f $RetentionInDays, $TotalRetentionInDays) -ForegroundColor Cyan
+$wsLabel = if ($WorkspaceRetentionInDays -gt 0) { "$WorkspaceRetentionInDays days" } else { 'unchanged (-1)' }
+Write-Host ("Workspace default : {0}" -f $wsLabel) -ForegroundColor Cyan
 Write-Host ""
 
 # ---- Helpers ---------------------------------------------------------------
@@ -116,7 +125,7 @@ function Get-SubscriptionWorkspaces {
     }
     $sid = (Get-AzContext).Subscription.Id
     Get-AzOperationalInsightsWorkspace | ForEach-Object {
-        [pscustomobject]@{ SubscriptionId = $sid; ResourceGroupName = $_.ResourceGroupName; Name = $_.Name }
+        [pscustomobject]@{ SubscriptionId = $sid; ResourceGroupName = $_.ResourceGroupName; Name = $_.Name; RetentionInDays = $_.RetentionInDays }
     }
 }
 
@@ -141,7 +150,7 @@ switch ($Scope) {
     'ResourceGroup' {
         if (-not $ResourceGroupName) { throw "Scope 'ResourceGroup' requires -ResourceGroupName." }
         $targets = Get-AzOperationalInsightsWorkspace -ResourceGroupName $ResourceGroupName | ForEach-Object {
-            [pscustomobject]@{ SubscriptionId = (Get-AzContext).Subscription.Id; ResourceGroupName = $_.ResourceGroupName; Name = $_.Name }
+            [pscustomobject]@{ SubscriptionId = (Get-AzContext).Subscription.Id; ResourceGroupName = $_.ResourceGroupName; Name = $_.Name; RetentionInDays = $_.RetentionInDays }
         }
     }
     'Subscription' { $targets = Get-SubscriptionWorkspaces -SubscriptionId (Get-AzContext).Subscription.Id }
@@ -163,6 +172,28 @@ foreach ($ws in $targets) {
         $currentSub = $ws.SubscriptionId
     }
     Write-Host ("=== [{0}] {1}/{2} ===" -f $ws.SubscriptionId, $ws.ResourceGroupName, $ws.Name) -ForegroundColor Green
+
+    # Optional: set the workspace-level default retention (one call per workspace).
+    if ($WorkspaceRetentionInDays -gt 0) {
+        if ($ws.RetentionInDays -eq $WorkspaceRetentionInDays) {
+            $results.Add([pscustomobject]@{ Workspace = $ws.Name; Table = '(workspace default)'; Status = 'Skipped (already compliant)' })
+        }
+        elseif ($PSCmdlet.ShouldProcess($ws.Name, "Set workspace default retention=$WorkspaceRetentionInDays")) {
+            try {
+                Set-AzOperationalInsightsWorkspace -ResourceGroupName $ws.ResourceGroupName -Name $ws.Name -RetentionInDays $WorkspaceRetentionInDays -ErrorAction Stop | Out-Null
+                Write-Host ("  [workspace] default retention set to {0}" -f $WorkspaceRetentionInDays) -ForegroundColor Yellow
+                $results.Add([pscustomobject]@{ Workspace = $ws.Name; Table = '(workspace default)'; Status = 'Updated' })
+            }
+            catch {
+                Write-Host ("  [workspace] failed -> {0}" -f $_.Exception.Message) -ForegroundColor DarkGray
+                $results.Add([pscustomobject]@{ Workspace = $ws.Name; Table = '(workspace default)'; Status = "Failed: $($_.Exception.Message)" })
+            }
+        }
+        else {
+            $results.Add([pscustomobject]@{ Workspace = $ws.Name; Table = '(workspace default)'; Status = 'WhatIf (would update)' })
+        }
+    }
+
     $tables = Get-AzOperationalInsightsTable -ResourceGroupName $ws.ResourceGroupName -WorkspaceName $ws.Name
 
     # Classify tables first (cheap, in-memory); only the actual updates hit the API.

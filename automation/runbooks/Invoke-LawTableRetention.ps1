@@ -24,6 +24,8 @@
       - law-retention-workspace       (string, empty = all workspaces in scope)
       - law-retention-analytics-days  (int, -1 = same as workspace)
       - law-retention-total-days      (int, e.g. 730; -1 = same as workspace)
+      - law-retention-workspace-days  (int, workspace default retention 30-730;
+                                       0 or unset = leave the workspace default unchanged)
 
     Any value passed as a runbook parameter (e.g. from a schedule) overrides the
     matching Automation Variable.
@@ -42,6 +44,7 @@ param(
     [string] $WorkspaceName,
     [string] $RetentionInDays,
     [string] $TotalRetentionInDays,
+    [string] $WorkspaceRetentionInDays,   # workspace default retention (30-730); empty/0 = leave unchanged
     [string] $PreviewOnly    # 'true' to preview (no changes)
 )
 
@@ -66,6 +69,8 @@ $rg     = Resolve-Config -ParamValue $ResourceGroupName    -VariableName 'law-re
 $wsName = Resolve-Config -ParamValue $WorkspaceName        -VariableName 'law-retention-workspace' -Optional
 $ret    = [int](Resolve-Config -ParamValue $RetentionInDays      -VariableName 'law-retention-analytics-days')
 $total  = [int](Resolve-Config -ParamValue $TotalRetentionInDays -VariableName 'law-retention-total-days')
+$wsRetRaw  = Resolve-Config -ParamValue $WorkspaceRetentionInDays -VariableName 'law-retention-workspace-days' -Optional
+$wsRetDays = [string]::IsNullOrWhiteSpace($wsRetRaw) ? -1 : [int]$wsRetRaw
 $mgName = Resolve-Config -ParamValue $ManagementGroupName  -VariableName 'law-retention-management-group' -Optional
 $subId  = Resolve-Config -ParamValue $SubscriptionId       -VariableName 'law-retention-subscription' -Optional
 $scopeMode = Resolve-Config -ParamValue $Scope            -VariableName 'law-retention-scope-mode' -Optional
@@ -77,6 +82,7 @@ Write-Output ("Resource group  : {0}" -f ([string]::IsNullOrWhiteSpace($rg) ? '(
 Write-Output ("Management group : {0}" -f ([string]::IsNullOrWhiteSpace($mgName) ? '(n/a)' : $mgName))
 Write-Output ("Workspace filter: {0}" -f ([string]::IsNullOrWhiteSpace($wsName) ? '(all)' : $wsName))
 Write-Output "Target retention: analytics=$ret total=$total  (-1 = same as workspace)  PreviewOnly=$whatIf"
+Write-Output ("Workspace default: {0}" -f ($wsRetDays -gt 0 ? "$wsRetDays days" : '(unchanged)'))
 
 function Test-RetentionMatch {
     param($current, $isDefault, $desired)
@@ -93,7 +99,7 @@ function Get-SubscriptionWorkspaces {
     }
     $sid = (Get-AzContext).Subscription.Id
     Get-AzOperationalInsightsWorkspace | ForEach-Object {
-        [pscustomobject]@{ SubscriptionId = $sid; ResourceGroupName = $_.ResourceGroupName; Name = $_.Name }
+        [pscustomobject]@{ SubscriptionId = $sid; ResourceGroupName = $_.ResourceGroupName; Name = $_.Name; RetentionInDays = $_.RetentionInDays }
     }
 }
 
@@ -117,7 +123,7 @@ switch ($scopeMode) {
     'ResourceGroup' {
         if ([string]::IsNullOrWhiteSpace($rg)) { throw "Scope 'ResourceGroup' requires law-retention-resource-group." }
         $targets = Get-AzOperationalInsightsWorkspace -ResourceGroupName $rg | ForEach-Object {
-            [pscustomobject]@{ SubscriptionId = (Get-AzContext).Subscription.Id; ResourceGroupName = $_.ResourceGroupName; Name = $_.Name }
+            [pscustomobject]@{ SubscriptionId = (Get-AzContext).Subscription.Id; ResourceGroupName = $_.ResourceGroupName; Name = $_.Name; RetentionInDays = $_.RetentionInDays }
         }
     }
     'Subscription' {
@@ -139,6 +145,7 @@ if (-not $targets) { Write-Warning "No Log Analytics workspaces found for scope 
 Write-Output ("Workspaces in scope: {0}" -f @($targets).Count)
 
 $updated = 0; $compliant = 0; $failed = 0
+$wsUpdated = 0; $wsCompliant = 0; $wsFailed = 0
 $currentSub = (Get-AzContext).Subscription.Id
 foreach ($ws in $targets) {
     if ($ws.SubscriptionId -and $ws.SubscriptionId -ne $currentSub) {
@@ -146,6 +153,24 @@ foreach ($ws in $targets) {
         $currentSub = $ws.SubscriptionId
     }
     Write-Output "=== [$($ws.SubscriptionId)] $($ws.ResourceGroupName)/$($ws.Name) ==="
+
+    # Optional: set the workspace-level default retention (one call per workspace).
+    if ($wsRetDays -gt 0) {
+        if ($ws.RetentionInDays -eq $wsRetDays) {
+            Write-Output "  [workspace] default retention already $wsRetDays"; $wsCompliant++
+        }
+        elseif ($whatIf) {
+            Write-Output "  [workspace] would set default retention to $wsRetDays"
+        }
+        else {
+            try {
+                Set-AzOperationalInsightsWorkspace -ResourceGroupName $ws.ResourceGroupName -Name $ws.Name -RetentionInDays $wsRetDays -ErrorAction Stop | Out-Null
+                Write-Output "  [workspace] default retention set to $wsRetDays"; $wsUpdated++
+            }
+            catch { Write-Output "  [workspace] failed: $($_.Exception.Message)"; $wsFailed++ }
+        }
+    }
+
     $tables = Get-AzOperationalInsightsTable -ResourceGroupName $ws.ResourceGroupName -WorkspaceName $ws.Name
     foreach ($t in $tables) {
         $retOk = Test-RetentionMatch -current $t.RetentionInDays      -isDefault $t.RetentionInDaysAsDefault      -desired $ret
@@ -162,4 +187,7 @@ foreach ($ws in $targets) {
     }
 }
 
-Write-Output "===== Summary: updated=$updated  alreadyCompliant=$compliant  failed=$failed ====="
+Write-Output "===== Summary (tables): updated=$updated  alreadyCompliant=$compliant  failed=$failed ====="
+if ($wsRetDays -gt 0) {
+    Write-Output "===== Summary (workspace default): updated=$wsUpdated  alreadyCompliant=$wsCompliant  failed=$wsFailed ====="
+}
