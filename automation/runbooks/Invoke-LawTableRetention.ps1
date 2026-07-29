@@ -26,6 +26,7 @@
       - law-retention-total-days      (int, e.g. 730; -1 = same as workspace)
       - law-retention-workspace-days  (int, workspace default retention 30-730;
                                        0 or unset = leave the workspace default unchanged)
+      - law-retention-throttle        (int, parallel table updates per workspace; default 10)
 
     Any value passed as a runbook parameter (e.g. from a schedule) overrides the
     matching Automation Variable.
@@ -45,6 +46,7 @@ param(
     [string] $RetentionInDays,
     [string] $TotalRetentionInDays,
     [string] $WorkspaceRetentionInDays,   # workspace default retention (30-730); empty/0 = leave unchanged
+    [string] $ThrottleLimit,              # parallel table updates per workspace (default 10)
     [string] $PreviewOnly    # 'true' to preview (no changes)
 )
 
@@ -71,6 +73,9 @@ $ret    = [int](Resolve-Config -ParamValue $RetentionInDays      -VariableName '
 $total  = [int](Resolve-Config -ParamValue $TotalRetentionInDays -VariableName 'law-retention-total-days')
 $wsRetRaw  = Resolve-Config -ParamValue $WorkspaceRetentionInDays -VariableName 'law-retention-workspace-days' -Optional
 $wsRetDays = [string]::IsNullOrWhiteSpace($wsRetRaw) ? -1 : [int]$wsRetRaw
+$throttleRaw = Resolve-Config -ParamValue $ThrottleLimit -VariableName 'law-retention-throttle' -Optional
+$throttle    = [string]::IsNullOrWhiteSpace($throttleRaw) ? 10 : [int]$throttleRaw
+if ($throttle -lt 1) { $throttle = 10 }
 
 # ---- Validate retention values (fail fast with a clear message) -------------
 $allowedTotal = @(-1) + (4..730) + @(1095, 1460, 1826, 2191, 2556, 2922, 3288, 3653, 4018, 4383)
@@ -96,6 +101,7 @@ Write-Output ("Management group : {0}" -f ([string]::IsNullOrWhiteSpace($mgName)
 Write-Output ("Workspace filter: {0}" -f ([string]::IsNullOrWhiteSpace($wsName) ? '(all)' : $wsName))
 Write-Output "Target retention: analytics=$ret total=$total  (-1 = same as workspace)  PreviewOnly=$whatIf"
 Write-Output ("Workspace default: {0}" -f ($wsRetDays -gt 0 ? "$wsRetDays days" : '(unchanged)'))
+Write-Output "Parallelism     : $throttle concurrent table updates per workspace"
 
 function Test-RetentionMatch {
     param($current, $isDefault, $desired)
@@ -185,18 +191,56 @@ foreach ($ws in $targets) {
     }
 
     $tables = Get-AzOperationalInsightsTable -ResourceGroupName $ws.ResourceGroupName -WorkspaceName $ws.Name
+
+    # Classify first (in-memory); only real updates hit the API.
+    $toUpdate = [System.Collections.Generic.List[object]]::new()
     foreach ($t in $tables) {
         $retOk = Test-RetentionMatch -current $t.RetentionInDays      -isDefault $t.RetentionInDaysAsDefault      -desired $ret
         $totOk = Test-RetentionMatch -current $t.TotalRetentionInDays -isDefault $t.TotalRetentionInDaysAsDefault -desired $total
         if ($retOk -and $totOk) { $compliant++; continue }
-
         if ($whatIf) { Write-Output "  [preview] would update $($t.Name)"; continue }
-        try {
-            Update-AzOperationalInsightsTable -ResourceGroupName $ws.ResourceGroupName -WorkspaceName $ws.Name `
-                -TableName $t.Name -RetentionInDays $ret -TotalRetentionInDays $total -ErrorAction Stop | Out-Null
-            Write-Output "  [updated] $($t.Name)"; $updated++
+        $toUpdate.Add($t)
+    }
+
+    # Apply updates in parallel via the ARM REST API. Invoke-RestMethod (not the
+    # Az cmdlet) keeps the parallel runspaces lightweight - no heavy module import
+    # per worker. One managed-identity token is fetched per workspace and shared.
+    if ($toUpdate.Count -gt 0) {
+        $wsRgLocal  = $ws.ResourceGroupName
+        $wsNmLocal  = $ws.Name
+        $wsSubLocal = $ws.SubscriptionId ? $ws.SubscriptionId : (Get-AzContext).Subscription.Id
+        $apiVer     = '2022-10-01'
+        $tokenObj   = Get-AzAccessToken -ResourceUrl 'https://management.azure.com/'
+        $armToken   = ($tokenObj.Token -is [System.Security.SecureString]) ?
+            ([System.Net.NetworkCredential]::new('', $tokenObj.Token).Password) : $tokenObj.Token
+
+        $outcomes = $toUpdate | ForEach-Object -ThrottleLimit $throttle -Parallel {
+            $t = $_
+            $props = @{}
+            if ($using:ret   -eq -1) { $props['retentionInDays'] = $null }      else { $props['retentionInDays'] = $using:ret }
+            if ($using:total -eq -1) { $props['totalRetentionInDays'] = $null } else { $props['totalRetentionInDays'] = $using:total }
+            $body = @{ properties = $props } | ConvertTo-Json -Depth 5
+            $uri  = "https://management.azure.com/subscriptions/$($using:wsSubLocal)/resourceGroups/$($using:wsRgLocal)/providers/Microsoft.OperationalInsights/workspaces/$($using:wsNmLocal)/tables/$($t.Name)?api-version=$($using:apiVer)"
+            $headers = @{ Authorization = "Bearer $($using:armToken)" }
+            for ($attempt = 1; $attempt -le 5; $attempt++) {
+                try {
+                    Invoke-RestMethod -Method Patch -Uri $uri -Headers $headers -Body $body -ContentType 'application/json' -ErrorAction Stop | Out-Null
+                    [pscustomobject]@{ Table = $t.Name; Ok = $true; Message = $null }
+                    break
+                }
+                catch {
+                    $code = $null; try { $code = [int]$_.Exception.Response.StatusCode } catch {}
+                    if ($code -eq 429 -and $attempt -lt 5) { Start-Sleep -Seconds (2 * $attempt); continue }
+                    [pscustomobject]@{ Table = $t.Name; Ok = $false; Message = $_.Exception.Message }
+                    break
+                }
+            }
         }
-        catch { Write-Output "  [skipped] $($t.Name): $($_.Exception.Message)"; $failed++ }
+
+        foreach ($o in $outcomes) {
+            if ($o.Ok) { Write-Output "  [updated] $($o.Table)"; $updated++ }
+            else { Write-Output "  [skipped] $($o.Table): $($o.Message)"; $failed++ }
+        }
     }
 }
 
