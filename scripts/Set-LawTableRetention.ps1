@@ -18,9 +18,11 @@
     reported rather than failing the run.
 
     Within each workspace the table updates are applied in parallel
-    (ForEach-Object -Parallel) to cut runtime on workspaces with hundreds of
-    tables. Use -ThrottleLimit to tune concurrency. Workspaces are still
-    processed one at a time so per-subscription context switching stays safe.
+    (ForEach-Object -Parallel) using the ARM REST API directly (Invoke-RestMethod
+    with a shared bearer token), which avoids importing the heavy Az modules into
+    every runspace - the main reason -Parallel with Az cmdlets is slow. Use
+    -ThrottleLimit to tune concurrency. Workspaces are still processed one at a
+    time so per-subscription context switching stays safe.
 
     Supports -WhatIf to preview changes without applying them.
 
@@ -230,31 +232,45 @@ foreach ($ws in $targets) {
         }
     }
 
-    # Apply this workspace's updates in parallel. The Az context is pinned via
-    # -DefaultProfile so each worker runspace authenticates against the right
-    # subscription without relying on the (process-global) current context.
+    # Apply this workspace's updates in parallel via the ARM REST API. Using
+    # Invoke-RestMethod (not the Az cmdlet) avoids importing the heavy
+    # Az.OperationalInsights module into every parallel runspace, which is the
+    # main reason -Parallel with Az cmdlets is slow. One bearer token is fetched
+    # per workspace and shared by all workers.
     if ($toUpdate.Count -gt 0) {
-        $wsCtx  = Get-AzContext
         $wsRg   = $ws.ResourceGroupName
         $wsName = $ws.Name
+        $wsSub  = if ($ws.SubscriptionId) { $ws.SubscriptionId } else { (Get-AzContext).Subscription.Id }
+        $apiVer = '2022-10-01'
+
+        $tokenObj = Get-AzAccessToken -ResourceUrl 'https://management.azure.com/'
+        $armToken = if ($tokenObj.Token -is [System.Security.SecureString]) {
+            [System.Net.NetworkCredential]::new('', $tokenObj.Token).Password
+        }
+        else { $tokenObj.Token }
 
         $updated = $toUpdate | ForEach-Object -ThrottleLimit $ThrottleLimit -Parallel {
             $table = $_
-            $p = @{
-                ResourceGroupName    = $using:wsRg
-                WorkspaceName        = $using:wsName
-                TableName            = $table.Name
-                RetentionInDays      = $using:RetentionInDays
-                TotalRetentionInDays = $using:TotalRetentionInDays
-                DefaultProfile       = $using:wsCtx
-                ErrorAction          = 'Stop'
-            }
-            try {
-                Update-AzOperationalInsightsTable @p | Out-Null
-                [pscustomobject]@{ Workspace = $using:wsName; Table = $table.Name; Status = 'Updated' }
-            }
-            catch {
-                [pscustomobject]@{ Workspace = $using:wsName; Table = $table.Name; Status = "Failed: $($_.Exception.Message)" }
+            $props = @{}
+            if ($using:RetentionInDays -eq -1) { $props['retentionInDays'] = $null } else { $props['retentionInDays'] = $using:RetentionInDays }
+            if ($using:TotalRetentionInDays -eq -1) { $props['totalRetentionInDays'] = $null } else { $props['totalRetentionInDays'] = $using:TotalRetentionInDays }
+            $body = @{ properties = $props } | ConvertTo-Json -Depth 5
+            $uri  = "https://management.azure.com/subscriptions/$($using:wsSub)/resourceGroups/$($using:wsRg)/providers/Microsoft.OperationalInsights/workspaces/$($using:wsName)/tables/$($table.Name)?api-version=$($using:apiVer)"
+            $headers = @{ Authorization = "Bearer $($using:armToken)" }
+
+            for ($attempt = 1; $attempt -le 5; $attempt++) {
+                try {
+                    Invoke-RestMethod -Method Patch -Uri $uri -Headers $headers -Body $body -ContentType 'application/json' -ErrorAction Stop | Out-Null
+                    [pscustomobject]@{ Workspace = $using:wsName; Table = $table.Name; Status = 'Updated' }
+                    break
+                }
+                catch {
+                    $code = $null
+                    try { $code = [int]$_.Exception.Response.StatusCode } catch {}
+                    if ($code -eq 429 -and $attempt -lt 5) { Start-Sleep -Seconds (2 * $attempt); continue }
+                    [pscustomobject]@{ Workspace = $using:wsName; Table = $table.Name; Status = "Failed: $($_.Exception.Message)" }
+                    break
+                }
             }
         }
 
