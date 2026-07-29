@@ -93,9 +93,9 @@ Run it once:
 
 Or run it on a schedule via an Automation runbook:
 
-**Bicep**
+> ⚠️ **Update the parameter file for the tool you choose before deploying.** For **Bicep** edit [`automation/bicep/main.bicepparam`](automation/bicep/main.bicepparam); for **Terraform** copy `terraform.tfvars.example` to `terraform.tfvars` and edit that. At minimum set your resource-group and Automation Account names; for wider scope also set the scope / subscription / management-group and role-assignment values (see [RBAC scope](#rbac-scope-where-the-identity-gets-log-analytics-contributor) below). Left unchanged, they deploy with the author's lab values.
 
-> ⚠️ **Edit [`automation/bicep/main.bicepparam`](automation/bicep/main.bicepparam) first.** At minimum set `targetResourceGroupName` (the RG holding your workspaces) and `automationAccountName`. For wider scope also set `scopeMode`, `subscriptionId` / `managementGroupName`, and `createRgRoleAssignment` (see [RBAC scope](#rbac-scope-where-the-identity-gets-log-analytics-contributor) below). Left unchanged, it deploys with the author's lab values.
+**Bicep**
 
 ```powershell
 az deployment group create -g <automation-rg> -f automation/bicep/main.bicep -p automation/bicep/main.bicepparam `
