@@ -65,6 +65,13 @@
       "metadata": {
         "description": "Tables whose name matches this wildcard pattern are skipped (e.g. 'App*' to exclude Application Insights tables). Default matches nothing (exclude none)."
       }
+    },
+    "assignmentResourceGroup": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Leave EMPTY to assign at the whole subscription. Set to an existing resource group NAME to scope the assignment (and its managed identity + role) to just that resource group."
+      }
     }
   },
   "variables": {
@@ -447,6 +454,7 @@
       }
     },
     {
+      "condition": "[empty(parameters('assignmentResourceGroup'))]",
       "type": "Microsoft.Authorization/policyAssignments",
       "apiVersion": "2022-06-01",
       "name": "[parameters('assignmentName')]",
@@ -483,6 +491,7 @@
       }
     },
     {
+      "condition": "[empty(parameters('assignmentResourceGroup'))]",
       "type": "Microsoft.Authorization/roleAssignments",
       "apiVersion": "2022-04-01",
       "name": "[variables('roleAssignmentName')]",
@@ -494,12 +503,89 @@
         "principalId": "[reference(subscriptionResourceId('Microsoft.Authorization/policyAssignments', parameters('assignmentName')), '2022-06-01', 'full').identity.principalId]",
         "principalType": "ServicePrincipal"
       }
+    },
+    {
+      "condition": "[not(empty(parameters('assignmentResourceGroup')))]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "assign-law-retention-rg",
+      "resourceGroup": "[parameters('assignmentResourceGroup')]",
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Authorization/policySetDefinitions', variables('initiativeName'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "parameters": {
+          "assignmentName": { "value": "[parameters('assignmentName')]" },
+          "location": { "value": "[parameters('location')]" },
+          "policyDefinitionId": { "value": "[subscriptionResourceId('Microsoft.Authorization/policySetDefinitions', variables('initiativeName'))]" },
+          "laContributorRoleDefinitionId": { "value": "[variables('laContributorRoleDefinitionId')]" },
+          "effect": { "value": "[parameters('effect')]" },
+          "workspaceRetentionInDays": { "value": "[parameters('workspaceRetentionInDays')]" },
+          "tableRetentionInDays": { "value": "[parameters('tableRetentionInDays')]" },
+          "tableTotalRetentionInDays": { "value": "[parameters('tableTotalRetentionInDays')]" },
+          "tableNameLike": { "value": "[parameters('tableNameLike')]" },
+          "tableNameNotLike": { "value": "[parameters('tableNameNotLike')]" }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "assignmentName": { "type": "string" },
+            "location": { "type": "string" },
+            "policyDefinitionId": { "type": "string" },
+            "laContributorRoleDefinitionId": { "type": "string" },
+            "effect": { "type": "string" },
+            "workspaceRetentionInDays": { "type": "int" },
+            "tableRetentionInDays": { "type": "int" },
+            "tableTotalRetentionInDays": { "type": "int" },
+            "tableNameLike": { "type": "string" },
+            "tableNameNotLike": { "type": "string" }
+          },
+          "variables": {
+            "roleAssignmentName": "[guid(resourceGroup().id, parameters('assignmentName'), 'la-contributor')]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Authorization/policyAssignments",
+              "apiVersion": "2022-06-01",
+              "name": "[parameters('assignmentName')]",
+              "location": "[parameters('location')]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "displayName": "Configure Log Analytics data retention",
+                "policyDefinitionId": "[parameters('policyDefinitionId')]",
+                "parameters": {
+                  "effect": { "value": "[parameters('effect')]" },
+                  "workspaceRetentionInDays": { "value": "[parameters('workspaceRetentionInDays')]" },
+                  "tableRetentionInDays": { "value": "[parameters('tableRetentionInDays')]" },
+                  "tableTotalRetentionInDays": { "value": "[parameters('tableTotalRetentionInDays')]" },
+                  "tableNameLike": { "value": "[parameters('tableNameLike')]" },
+                  "tableNameNotLike": { "value": "[parameters('tableNameNotLike')]" }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[variables('roleAssignmentName')]",
+              "dependsOn": [
+                "[resourceId('Microsoft.Authorization/policyAssignments', parameters('assignmentName'))]"
+              ],
+              "properties": {
+                "roleDefinitionId": "[parameters('laContributorRoleDefinitionId')]",
+                "principalId": "[reference(resourceId('Microsoft.Authorization/policyAssignments', parameters('assignmentName')), '2022-06-01', 'full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+              }
+            }
+          ]
+        }
+      }
     }
-  ],
-  "outputs": {
-    "assignmentPrincipalId": {
-      "type": "string",
-      "value": "[reference(subscriptionResourceId('Microsoft.Authorization/policyAssignments', parameters('assignmentName')), '2022-06-01', 'full').identity.principalId]"
-    }
-  }
+  ]
 }

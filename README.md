@@ -12,6 +12,8 @@ Govern **Log Analytics data retention** - at the **workspace** level and per **t
 
 The button opens a **subscription-scoped** deployment of [`azuredeploy.json`](azuredeploy.json): pick the subscription and region, adjust the retention values, and deploy. It creates the two policy definitions, the initiative, the **assignment (with a managed identity)**, and the **Log Analytics Contributor** role assignment - so new and updated workspaces/tables are configured automatically.
 
+> **Scope it to a resource group:** leave **Assignment Resource Group** empty to assign at the whole subscription, or enter an **existing** resource group name to scope the assignment (and its managed identity + role) to just that RG. The policy *definitions* are always created at the subscription; only the assignment is narrowed. (For an individual-resource scope, use `deploy.ps1 -Scope <resourceId>` or the portal.)
+
 > You need permission to create policy and **role** assignments at the subscription (e.g. **Owner**). To fix **existing** resources after deploying, create a remediation task under **Policy → Remediation** (or run `deploy.ps1`, which starts them for you).
 
 Prefer scripts or the portal instead? Continue below.
