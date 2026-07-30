@@ -5,7 +5,7 @@
     "displayName": "Configure Log Analytics table data retention (analytics and total retention)",
     "policyType": "Custom",
     "mode": "All",
-    "description": "Configures analytics (retentionInDays) and total (totalRetentionInDays) retention of individual tables in Log Analytics workspaces to the values you specify. Uses DeployIfNotExists: when a table's retention differs from the target values, the policy deploys a table update to set them. Create a remediation task to bring existing tables into compliance. Requires a managed identity with the Log Analytics Contributor role at the assignment scope. Note: Basic/Auxiliary plan tables have a fixed analytics retention that can't be changed and will keep reporting non-compliant - exempt them if the noise is unwanted. DeployIfNotExists sets concrete values, so provide real day counts (the -1 'Same as workspace settings' inherit option is not available with this effect).",
+    "description": "Configures analytics (retentionInDays) and total (totalRetentionInDays) retention of individual tables in Log Analytics workspaces, using DeployIfNotExists. Use tableNameLike/tableNameNotLike to filter which tables are governed. Create a remediation task to fix existing tables. Requires a managed identity with the Log Analytics Contributor role. Basic/Auxiliary tables have fixed retention and always report non-compliant.",
     "metadata": {
       "category": "Monitoring",
       "version": "2.0.0",

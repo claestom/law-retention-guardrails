@@ -5,7 +5,7 @@
     "displayName": "Configure Log Analytics workspace data retention (workspace level)",
     "policyType": "Custom",
     "mode": "Indexed",
-    "description": "Configures the workspace-level analytics data retention (retentionInDays) of Log Analytics workspaces to the number of days you specify. Uses DeployIfNotExists: when a workspace's retention differs from the target value, the policy deploys a workspace update to set it. Create a remediation task to bring existing workspaces into compliance. Requires a managed identity with the Log Analytics Contributor role at the assignment scope. If no value is supplied, the target retention defaults to 30 days, the minimum for a Log Analytics workspace.",
+    "description": "Configures the workspace-level analytics data retention (retentionInDays) of Log Analytics workspaces to the number of days you specify, using DeployIfNotExists. Create a remediation task to bring existing workspaces into compliance. Requires a managed identity with the Log Analytics Contributor role at the assignment scope. Defaults to 30 days (the minimum).",
     "metadata": {
       "category": "Monitoring",
       "version": "2.0.0",

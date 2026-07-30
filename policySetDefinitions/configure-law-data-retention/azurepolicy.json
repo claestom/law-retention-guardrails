@@ -4,7 +4,7 @@
   "properties": {
     "displayName": "Configure Log Analytics data retention (workspace and table level)",
     "policyType": "Custom",
-    "description": "Initiative that configures data retention for Log Analytics workspaces at both the workspace level (default analytics retention) and the individual table level (analytics retention and total retention). Both member policies use DeployIfNotExists to remediate non-compliant workspaces and tables; create remediation tasks to bring existing resources into compliance. Requires a managed identity with the Log Analytics Contributor role at the assignment scope. The workspace setting defaults to 30 days (the minimum) and both table settings default to 30 days.",
+    "description": "Configures Log Analytics data retention at both the workspace level and the individual table level, using DeployIfNotExists. Create remediation tasks to bring existing resources into compliance. Requires a managed identity with the Log Analytics Contributor role at the assignment scope.",
     "metadata": {
       "category": "Monitoring",
       "version": "2.0.0",

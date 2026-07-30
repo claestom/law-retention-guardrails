@@ -242,21 +242,38 @@ try {
     # ---- 6) Remediation tasks (existing resources) ------------------------
     Write-Host ""
     Write-Host "Starting remediation tasks for existing workspaces and tables" -ForegroundColor Green
-    if ($assignRgName) {
+    # The remediation scope must be AT or BELOW the assignment scope.
+    $remScope = @()
+    $canRemediate = $true
+    if (-not [string]::IsNullOrWhiteSpace($Scope) -and
+        $Scope -match '/resourceGroups/(?<rg>[^/]+)/providers/(?<ns>[^/]+)/(?<type>[^/]+)/(?<name>[^/]+)$') {
+        # Resource-scoped assignment: remediate at that resource.
+        $remScope = @(
+            "--resource-group", $Matches.rg,
+            "--namespace",      $Matches.ns,
+            "--resource-type",  $Matches.type,
+            "--resource",       $Matches.name
+        )
+    } elseif ($assignRgName) {
         $remScope = @("--resource-group", $assignRgName)
     } elseif ($useMg) {
         $remScope = @("--management-group", $ManagementGroupId)
-    } else {
-        $remScope = @()
+    } elseif (-not [string]::IsNullOrWhiteSpace($Scope)) {
+        # An explicit scope we can't map to a remediation scope (e.g. a nested/child resource).
+        $canRemediate = $false
     }
-    foreach ($ref in @("configureLawWorkspaceRetention", "configureLawTableRetention")) {
-        $remName = "remediate-$ref-$((Get-Date).ToString('yyyyMMddHHmmss'))"
-        az policy remediation create `
-            --name $remName `
-            --policy-assignment $assignmentId `
-            --definition-reference-id $ref `
-            @remScope | Out-Null
-        Write-Host "  remediation started: $remName ($ref)"
+    if ($canRemediate) {
+        foreach ($ref in @("configureLawWorkspaceRetention", "configureLawTableRetention")) {
+            $remName = "remediate-$ref-$((Get-Date).ToString('yyyyMMddHHmmss'))"
+            az policy remediation create `
+                --name $remName `
+                --policy-assignment $assignmentId `
+                --definition-reference-id $ref `
+                @remScope | Out-Null
+            Write-Host "  remediation started: $remName ($ref)"
+        }
+    } else {
+        Write-Host "  Skipping automatic remediation for scope '$Scope' - create remediation tasks in the portal (Policy -> Remediation)." -ForegroundColor Yellow
     }
 
     Write-Host ""
