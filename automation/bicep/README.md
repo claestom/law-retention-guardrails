@@ -44,13 +44,18 @@ az deployment group create -g $automationRg -f main.bicep -p main.bicepparam `
 
 ## RBAC scope (subscription / management group)
 
-`main.bicep` can only grant the role on its own resource group. For wider scope set `createRgRoleAssignment=false`, deploy, then grant at the higher scope using the identity's principal id (from the deploy output `managedIdentityPrincipalId`):
+`main.bicep` can only grant the role on its own resource group. For wider scope set `createRgRoleAssignment=false`, deploy, then grant at the higher scope. Pull the identity's principal id straight from the main deployment output so you don't have to look it up:
 
 ```powershell
+# grab the managed identity's principal id from the main deployment output
+$principalId = az deployment group show -g $automationRg -n main `
+  --query properties.outputs.managedIdentityPrincipalId.value -o tsv
+
 # subscription
-az deployment sub create -l <location> -f roleAssignment.subscription.bicep -p principalId=<principalId>
+az deployment sub create -l westeurope -f roleAssignment.subscription.bicep -p principalId=$principalId
+
 # management group
-az deployment mg create -m <mgId> -l <location> -f roleAssignment.managementGroup.bicep -p principalId=<principalId>
+az deployment mg create -m <mgId> -l westeurope -f roleAssignment.managementGroup.bicep -p principalId=$principalId
 ```
 
 Granting the role at subscription/management-group scope requires you to have **Owner** or **User Access Administrator** there.
