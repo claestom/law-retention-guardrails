@@ -33,7 +33,8 @@ variable "schedule_name" {
 
 variable "schedule_start_time" {
   type        = string
-  description = "Schedule start time (RFC3339, must be >5 minutes in the future). Example: 2026-07-22T03:00:00Z"
+  default     = ""
+  description = "Schedule start time (RFC3339, must be >5 minutes in the future). Leave empty to default to ~2 hours from apply time."
 }
 
 variable "time_zone" {

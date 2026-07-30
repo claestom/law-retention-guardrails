@@ -50,6 +50,7 @@ resource "azurerm_automation_variable_string" "resource_group" {
 }
 
 resource "azurerm_automation_variable_string" "workspace" {
+  count                   = var.workspace_name_filter != "" ? 1 : 0
   name                    = "law-retention-workspace"
   resource_group_name     = data.azurerm_resource_group.automation.name
   automation_account_name = azurerm_automation_account.this.name
@@ -64,6 +65,7 @@ resource "azurerm_automation_variable_string" "scope_mode" {
 }
 
 resource "azurerm_automation_variable_string" "management_group" {
+  count                   = var.scope_management_group != "" ? 1 : 0
   name                    = "law-retention-management-group"
   resource_group_name     = data.azurerm_resource_group.automation.name
   automation_account_name = azurerm_automation_account.this.name
@@ -71,6 +73,7 @@ resource "azurerm_automation_variable_string" "management_group" {
 }
 
 resource "azurerm_automation_variable_string" "subscription" {
+  count                   = var.scope_subscription_id != "" ? 1 : 0
   name                    = "law-retention-subscription"
   resource_group_name     = data.azurerm_resource_group.automation.name
   automation_account_name = azurerm_automation_account.this.name
@@ -117,6 +120,12 @@ resource "azurerm_automation_runbook" "this" {
   description             = "Applies table-level retention across all Log Analytics workspaces in a resource group."
 
   content = file("${path.module}/../runbooks/Invoke-LawTableRetention.ps1")
+
+  lifecycle {
+    # Some azurerm versions read PowerShell72 back as "PowerShell", causing a
+    # perpetual diff. The runbook is created as PowerShell 7.2 regardless.
+    ignore_changes = [runbook_type]
+  }
 }
 
 # ---- Weekly schedule --------------------------------------------------------
@@ -127,8 +136,14 @@ resource "azurerm_automation_schedule" "weekly" {
   frequency               = "Week"
   interval                = 1
   timezone                = var.time_zone
-  start_time              = var.schedule_start_time
+  start_time              = var.schedule_start_time != "" ? var.schedule_start_time : timeadd(timestamp(), "2h")
   week_days               = ["Sunday"]
+
+  lifecycle {
+    # start_time drifts into the past after creation and Azure normalizes the
+    # timezone (UTC -> Etc/UTC); ignore both to avoid a perpetual diff/recreate.
+    ignore_changes = [start_time, timezone]
+  }
 }
 
 resource "azurerm_automation_job_schedule" "weekly" {
