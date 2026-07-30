@@ -87,6 +87,9 @@ az policy assignment create --name law-data-retention `
 **Why a script instead of the policy?** A workspace exposes *every* built-in table as a resource - often 800-1500, most of them empty. A DeployIfNotExists policy would queue **one remediation deployment per table, per workspace** (slow, noisy, throttling-prone). The script loops tables directly, is **idempotent** (skips tables already correct), and lets you target exactly what you want. So: use the **policy to audit**, and this **script to configure**.
 
 Run it once:
+
+⚠️ Make sure to edit the values in the Set-LawTableRetention.ps1.
+
 ```powershell
 # preview (no changes)
 ./scripts/Set-LawTableRetention.ps1 -ResourceGroupName <rg> -WhatIf
