@@ -6,7 +6,9 @@ Govern **Log Analytics data retention** - at the **workspace** level and per **t
 
 ## Deploy with one click
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fclaestom%2Flaw-retention-guardrails%2Fmain%2Fazuredeploy.json)
+<p align="center">
+  <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fclaestom%2Flaw-retention-guardrails%2Fmain%2Fazuredeploy.json"><img src="https://aka.ms/deploytoazurebutton" alt="Deploy to Azure" /></a>
+</p>
 
 The button opens a **subscription-scoped** deployment of [`azuredeploy.json`](azuredeploy.json): pick the subscription and region, adjust the retention values, and deploy. It creates the two policy definitions, the initiative, the **assignment (with a managed identity)**, and the **Log Analytics Contributor** role assignment - so new and updated workspaces/tables are configured automatically.
 
