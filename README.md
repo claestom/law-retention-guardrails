@@ -101,6 +101,46 @@ az policy remediation list -o table
    - grant it **Log Analytics Contributor** at the scope (the portal offers to do this).
 4. On the assignment's **Remediation** tab, **create a remediation task** for each policy to fix existing resources.
 
+## Sentinel & Application Insights (keep the free 90 days)
+
+Enabling **Microsoft Sentinel** on a workspace, or using workspace-based **Application Insights**, gives you **90 days of interactive (analytics) retention for free**. A blanket 30-day analytics target would throw that away. Handle those cases with **extra assignments** that use different values - Azure Policy applies the most specific one.
+
+> ⚠️ Keep assignments **mutually exclusive**. Two DeployIfNotExists assignments that both match the same table will fight (each keeps re-remediating to its own value). Split by **table name** (App Insights) or by **scope** (Sentinel), never let them overlap.
+
+**Application Insights - split by table name.** The table policy has `tableNameLike` / `tableNameNotLike` (wildcard `like` patterns). App Insights tables all start with `App`, so:
+
+| Assignment | Filter | analytics | total |
+|---|---|---|---|
+| Baseline | `-TableNameNotLike 'App*'` | 30 | your value |
+| App Insights overlay | `-TableNameLike 'App*'` | **90** | your value |
+
+```powershell
+# Baseline: everything except App* tables
+./deploy.ps1 -SubscriptionId <sub> -AssignmentName law-retention-base `
+  -TableRetentionInDays 30 -TableTotalRetentionInDays 730 -TableNameNotLike 'App*'
+
+# Overlay: only App* tables, analytics 90 (same workspace value so the two agree)
+./deploy.ps1 -SubscriptionId <sub> -AssignmentName law-retention-appinsights `
+  -TableRetentionInDays 90 -TableTotalRetentionInDays 730 -TableNameLike 'App*' -WorkspaceRetentionInDays 30
+```
+
+> Wildcards cover every shape: `App*` = *starts with*, `*_CL` = *ends with*, `*Sign*` = *contains* (Azure Policy has no `startsWith`/`endsWith` operators - they're just `like` patterns). If `field('name')` resolves to the full `workspace/table` name in your tenant, use `*/App*` instead of `App*`.
+
+**Sentinel - split by scope.** Assuming Sentinel runs in a dedicated workspace/resource group, assign 90-day values there and **carve that scope out of the baseline** with `-NotScopes`:
+
+```powershell
+$sentinelRg = "/subscriptions/<sub>/resourceGroups/rg-sentinel"
+
+# Baseline everywhere except the Sentinel RG
+./deploy.ps1 -SubscriptionId <sub> -AssignmentName law-retention-base -NotScopes $sentinelRg
+
+# Sentinel RG at 90 days
+./deploy.ps1 -SubscriptionId <sub> -AssignmentName law-retention-sentinel `
+  -WorkspaceRetentionInDays 90 -TableRetentionInDays 90 -TableTotalRetentionInDays 730
+```
+
+> Each assignment gets its **own** managed identity and **its own** Log Analytics Contributor grant - `deploy.ps1` does that per run. Keep the **workspace** retention value identical across any two assignments that both manage the same workspace, or they'll conflict on that setting.
+
 ## Optional: configure a workspace once, manually
 
 `scripts/Set-LawTableRetention.ps1` sets table retention imperatively for a resource group / subscription / management group (with `-WhatIf` preview). It's handy for a quick one-off pass or a smoke test, but it is **not required** - the DeployIfNotExists policies and remediation tasks above handle both new and existing resources.

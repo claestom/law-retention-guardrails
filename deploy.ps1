@@ -42,6 +42,15 @@ param(
     [int] $TableRetentionInDays      = 30,
     [int] $TableTotalRetentionInDays = 730,
 
+    # Table-name filter for this assignment (wildcard 'like' patterns). Defaults govern all tables.
+    # Example: baseline uses -TableNameNotLike 'App*'; an App Insights overlay uses -TableNameLike 'App*'.
+    [string] $TableNameLike    = "*",
+    [string] $TableNameNotLike = "~noexclude~",
+
+    # Optional scopes to exclude from this assignment (e.g. a dedicated Sentinel resource group
+    # that is governed by its own assignment at 90 days).
+    [string[]] $NotScopes,
+
     # Only create/update the definitions and initiative; skip assignment, role and remediation.
     [switch] $SkipAssignment
 )
@@ -168,7 +177,11 @@ try {
         workspaceRetentionInDays  = @{ value = $WorkspaceRetentionInDays }
         tableRetentionInDays      = @{ value = $TableRetentionInDays }
         tableTotalRetentionInDays = @{ value = $TableTotalRetentionInDays }
+        tableNameLike             = @{ value = $TableNameLike }
+        tableNameNotLike          = @{ value = $TableNameNotLike }
     }
+    $notScopesArgs = @()
+    if ($NotScopes -and $NotScopes.Count -gt 0) { $notScopesArgs = @("--not-scopes") + $NotScopes }
     az policy assignment create `
         --name $AssignmentName `
         --display-name "Configure Log Analytics data retention" `
@@ -176,7 +189,8 @@ try {
         --scope $assignScope `
         --params (New-JsonArg $assignParams) `
         --mi-system-assigned `
-        --location $Location | Out-Null
+        --location $Location `
+        @notScopesArgs | Out-Null
 
     $assignmentId = az policy assignment show --name $AssignmentName --scope $assignScope --query id -o tsv
     $principalId  = az policy assignment show --name $AssignmentName --scope $assignScope --query identity.principalId -o tsv
