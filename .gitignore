@@ -1,6 +1,8 @@
 # Bicep build output
 **/*.bicep.json
-automation/bicep/main.json
+
+# Local-only legacy runbook/Automation Account approach + original README (kept out of the repo)
+.legacy/
 
 # Terraform
 **/.terraform/

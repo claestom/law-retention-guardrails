@@ -5,10 +5,10 @@
     "displayName": "Configure Log Analytics workspace data retention (workspace level)",
     "policyType": "Custom",
     "mode": "Indexed",
-    "description": "Governs the workspace-level analytics data retention (retentionInDays) of Log Analytics workspaces against the number of days you specify. Audit flags workspaces whose retention differs from that value; configuration is handled by the Automation runbook or script, not by policy remediation. If no value is supplied, the target retention defaults to 30 days, which is the minimum retention period for a Log Analytics workspace.",
+    "description": "Configures the workspace-level analytics data retention (retentionInDays) of Log Analytics workspaces to the number of days you specify. Uses DeployIfNotExists: when a workspace's retention differs from the target value, the policy deploys a workspace update to set it. Create a remediation task to bring existing workspaces into compliance. Requires a managed identity with the Log Analytics Contributor role at the assignment scope. If no value is supplied, the target retention defaults to 30 days, the minimum for a Log Analytics workspace.",
     "metadata": {
       "category": "Monitoring",
-      "version": "1.1.0",
+      "version": "2.0.0",
       "source": "https://learn.microsoft.com/azure/azure-monitor/logs/data-retention-configure"
     },
     "parameters": {
@@ -16,12 +16,14 @@
         "type": "String",
         "metadata": {
           "displayName": "Effect",
-          "description": "The policy effect. Only Audit is supported: it reports workspaces whose retention does not match the specified value without changing anything."
+          "description": "The policy effect. DeployIfNotExists remediates non-compliant workspaces, AuditIfNotExists only reports them, Disabled turns the policy off."
         },
         "allowedValues": [
-          "Audit"
+          "DeployIfNotExists",
+          "AuditIfNotExists",
+          "Disabled"
         ],
-        "defaultValue": "Audit"
+        "defaultValue": "DeployIfNotExists"
       },
       "workspaceRetentionInDays": {
         "type": "Integer",
@@ -34,19 +36,64 @@
     },
     "policyRule": {
       "if": {
-        "allOf": [
-          {
-            "field": "type",
-            "equals": "Microsoft.OperationalInsights/workspaces"
-          },
-          {
-            "field": "Microsoft.OperationalInsights/workspaces/retentionInDays",
-            "notEquals": "[parameters('workspaceRetentionInDays')]"
-          }
-        ]
+        "field": "type",
+        "equals": "Microsoft.OperationalInsights/workspaces"
       },
       "then": {
-        "effect": "[parameters('effect')]"
+        "effect": "[parameters('effect')]",
+        "details": {
+          "type": "Microsoft.OperationalInsights/workspaces",
+          "name": "[field('name')]",
+          "roleDefinitionIds": [
+            "/providers/Microsoft.Authorization/roleDefinitions/92aaf0da-9dab-42b6-94a3-d43ce8d16293"
+          ],
+          "existenceCondition": {
+            "field": "Microsoft.OperationalInsights/workspaces/retentionInDays",
+            "equals": "[parameters('workspaceRetentionInDays')]"
+          },
+          "deployment": {
+            "properties": {
+              "mode": "incremental",
+              "parameters": {
+                "workspaceName": {
+                  "value": "[field('name')]"
+                },
+                "location": {
+                  "value": "[field('location')]"
+                },
+                "retentionInDays": {
+                  "value": "[parameters('workspaceRetentionInDays')]"
+                }
+              },
+              "template": {
+                "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                "contentVersion": "1.0.0.0",
+                "parameters": {
+                  "workspaceName": {
+                    "type": "string"
+                  },
+                  "location": {
+                    "type": "string"
+                  },
+                  "retentionInDays": {
+                    "type": "int"
+                  }
+                },
+                "resources": [
+                  {
+                    "type": "Microsoft.OperationalInsights/workspaces",
+                    "apiVersion": "2022-10-01",
+                    "name": "[parameters('workspaceName')]",
+                    "location": "[parameters('location')]",
+                    "properties": {
+                      "retentionInDays": "[parameters('retentionInDays')]"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
       }
     }
   }

@@ -4,10 +4,10 @@
   "properties": {
     "displayName": "Configure Log Analytics data retention (workspace and table level)",
     "policyType": "Custom",
-    "description": "Initiative that governs data retention for Log Analytics workspaces at both the workspace level (default analytics retention) and the individual table level (analytics retention and total retention). Both member policies run in Audit only, reporting workspaces and tables whose retention does not match. Table settings default to -1 ('Same as workspace settings') and the workspace setting defaults to 30 days (the minimum).",
+    "description": "Initiative that configures data retention for Log Analytics workspaces at both the workspace level (default analytics retention) and the individual table level (analytics retention and total retention). Both member policies use DeployIfNotExists to remediate non-compliant workspaces and tables; create remediation tasks to bring existing resources into compliance. Requires a managed identity with the Log Analytics Contributor role at the assignment scope. The workspace setting defaults to 30 days (the minimum) and both table settings default to 30 days.",
     "metadata": {
       "category": "Monitoring",
-      "version": "1.1.0",
+      "version": "2.0.0",
       "source": "https://learn.microsoft.com/azure/azure-monitor/logs/data-retention-configure"
     },
     "parameters": {
@@ -15,12 +15,14 @@
         "type": "String",
         "metadata": {
           "displayName": "Effect",
-          "description": "The effect applied by both member policies. Only Audit is supported: it reports workspaces and tables whose retention does not match without changing anything."
+          "description": "The effect applied by both member policies. DeployIfNotExists remediates non-compliant workspaces and tables, AuditIfNotExists only reports them, Disabled turns the policies off."
         },
         "allowedValues": [
-          "Audit"
+          "DeployIfNotExists",
+          "AuditIfNotExists",
+          "Disabled"
         ],
-        "defaultValue": "Audit"
+        "defaultValue": "DeployIfNotExists"
       },
       "workspaceRetentionInDays": {
         "type": "Integer",
@@ -34,17 +36,17 @@
         "type": "Integer",
         "metadata": {
           "displayName": "Table analytics retention (days)",
-          "description": "Analytics (interactive) retention in days for each table. Use -1 for 'Same as workspace settings'. Otherwise 4-730. Defaults to -1."
+          "description": "Analytics (interactive) retention in days for each table. Allowed range is 4-730. Defaults to 30. Keep this low to control cost; use total retention for long-term storage."
         },
-        "defaultValue": -1
+        "defaultValue": 30
       },
       "tableTotalRetentionInDays": {
         "type": "Integer",
         "metadata": {
           "displayName": "Table total retention (days)",
-          "description": "Total retention in days (analytics + long-term) for each table. Use -1 for 'Same as workspace settings'. Otherwise 4-730, or 1095, 1460, 1826, 2191, 2556, 2922, 3288, 3653, 4018, 4383. Defaults to -1."
+          "description": "Total retention in days (analytics + long-term) for each table. Allowed values are 4-730, or 1095, 1460, 1826, 2191, 2556, 2922, 3288, 3653, 4018, 4383. Defaults to 30."
         },
-        "defaultValue": -1
+        "defaultValue": 30
       }
     },
     "policyDefinitionGroups": [
