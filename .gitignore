@@ -17,3 +17,6 @@ Thumbs.db
 
 # Local-only perf-comparison script (kept out of the repo)
 scripts/Set-LawTableRetention.Sequential.ps1
+
+# Draft Tech Community article (kept out of the repo)
+article-techcommunity.md
