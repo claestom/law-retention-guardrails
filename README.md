@@ -33,14 +33,10 @@ Each table has **two** retention settings (the same ones you see in the portal's
 
 | Setting | What it controls | Allowed values |
 |---|---|---|
-| **Analytics retention** | how long data stays "hot" and interactively queryable | `4`–`730` days, or `-1` |
-| **Total retention** | analytics **+** long-term (archive) storage; must be ≥ analytics | `4`–`730`, or `1095, 1460, 1826, 2191, 2556, 2922, 3288, 3653, 4018, 4383` days, or `-1` |
+| **Analytics retention** | how long data stays "hot" and interactively queryable | `4`–`730` days |
+| **Total retention** | analytics **+** long-term (archive) storage; must be ≥ analytics | `4`–`730`, or `1095, 1460, 1826, 2191, 2556, 2922, 3288, 3653, 4018, 4383` days |
 
 Keep **analytics retention low** (e.g. 30 days) to control cost, and use **total retention** for cheaper long-term storage. The **workspace** retention is the default that tables inherit until a table-level value is set.
-
-**What `-1` means.** For a table, `-1` = **"Same as workspace settings"** - the table doesn't pin its own value but **inherits the workspace default** (and, for total retention, keeps no long-term storage beyond that default). It's the same *Same as workspace settings* option you see in the portal's *Manage table* dropdown.
-
-> ℹ️ **The DeployIfNotExists policies don't use `-1`.** They write **concrete** day counts, so `-1` (inherit) isn't a valid target for the policy - give it real numbers (e.g. analytics `30`, total `730`). `-1` is still useful with the optional manual [script](#optional-configure-a-workspace-once-manually) below, where it explicitly resets a table back to *inherit the workspace default*.
 
 > ⚠️ **Basic / Auxiliary Logs tables always report non-compliant.** These plans have a fixed analytics retention (30 days) that can't be changed, so they can never match a different target analytics value. This is expected - treat those results as noise, or exclude those tables via a policy exemption.
 
@@ -102,11 +98,7 @@ az policy remediation list -o table
 ./scripts/Set-LawTableRetention.ps1 -ResourceGroupName <rg> -WhatIf
 # apply
 ./scripts/Set-LawTableRetention.ps1 -ResourceGroupName <rg> -RetentionInDays 30 -TotalRetentionInDays 730
-# reset tables back to "Same as workspace settings" (inherit the workspace default)
-./scripts/Set-LawTableRetention.ps1 -ResourceGroupName <rg> -RetentionInDays -1 -TotalRetentionInDays -1
 ```
-
-Unlike the policy, this script accepts `-1` for either value to mean **"Same as workspace settings"** - use it to hand a table's retention back to the workspace default.
 
 ## Resources
 
