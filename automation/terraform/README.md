@@ -22,7 +22,7 @@ cp terraform.tfvars.example terraform.tfvars   # then edit
 | `scope_management_group` | MG the runbook enumerates for `ManagementGroup` scope | `''` |
 | `role_assignment_scope` | where the identity gets Log Analytics Contributor: `resource_group` \| `subscription` \| `management_group` | `resource_group` |
 | `management_group_name` | MG for the role assignment when `role_assignment_scope = management_group` | `''` |
-| `automation_account_name` | Automation Account to create | `aa-law-retention` |
+| `automation_account_name` | base name (a unique per-RG suffix is appended) | `aa-law-retention` |
 | `runbook_name` / `schedule_name` | resource names | defaults |
 
 ## 2. Deploy

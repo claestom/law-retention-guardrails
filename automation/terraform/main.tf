@@ -23,8 +23,15 @@ data "azurerm_resource_group" "target" {
   name = var.target_resource_group_name
 }
 
+# Automation Account names must be unique per subscription (across resource
+# groups), so append a deterministic suffix derived from the resource group.
+# Same RG => same name (idempotent); different RG => no collision.
+locals {
+  automation_account_name = "${var.automation_account_name}-${substr(sha1(data.azurerm_resource_group.automation.id), 0, 8)}"
+}
+
 resource "azurerm_automation_account" "this" {
-  name                = var.automation_account_name
+  name                = local.automation_account_name
   location            = data.azurerm_resource_group.automation.location
   resource_group_name = data.azurerm_resource_group.automation.name
   sku_name            = "Basic"

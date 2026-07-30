@@ -23,7 +23,7 @@ Deploys the table-retention Automation runbook: an Automation Account (system-as
 | `subscriptionId` | target sub for `Subscription` scope | `''` (identity's home sub) |
 | `managementGroupName` | MG the runbook enumerates for `ManagementGroup` scope | `''` |
 | `createRgRoleAssignment` | grant the identity Log Analytics Contributor on the target RG | `true` |
-| `automationAccountName` | Automation Account to create | `aa-law-retention` |
+| `automationAccountName` | base name (a unique per-RG suffix is appended) | `aa-law-retention` |
 | `runbookName` / `scheduleName` | resource names | defaults |
 
 > Bicep can't embed a local file, so the runbook content comes from `runbookContentUri`. Leave it empty to create an empty runbook and upload the script afterward, or point it at the raw file URL:

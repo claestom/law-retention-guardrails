@@ -1,6 +1,6 @@
 using 'main.bicep'
 
-param automationAccountName = 'aa-law-retention'
+param automationAccountName = 'aa-law-retention'  // base name; a unique per-RG suffix is appended automatically
 
 // ---- Retention the runbook applies to every table --------------------------
 param analyticsRetentionInDays = -1

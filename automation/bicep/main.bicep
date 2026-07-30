@@ -9,7 +9,7 @@
 
 targetScope = 'resourceGroup'
 
-@description('Name of the Automation Account to create.')
+@description('Base name for the Automation Account. A deterministic suffix derived from the resource group is appended, because Automation Account names must be unique per subscription (across resource groups).')
 param automationAccountName string = 'aa-law-retention'
 
 @description('Location for the Automation Account.')
@@ -68,8 +68,13 @@ param logAnalyticsContributorRoleId string = '92aaf0da-9dab-42b6-94a3-d43ce8d162
 @description('Create the Log Analytics Contributor role assignment on the target resource group. Set false to grant at subscription or management group scope instead, using roleAssignment.subscription.bicep / roleAssignment.managementGroup.bicep.')
 param createRgRoleAssignment bool = true
 
+// Automation Account names must be unique per subscription (across resource
+// groups), so append a deterministic suffix derived from the resource group.
+// Same RG => same name (idempotent re-deploys); different RG => no collision.
+var automationAccountFullName = '${automationAccountName}-${uniqueString(resourceGroup().id)}'
+
 resource aa 'Microsoft.Automation/automationAccounts@2023-11-01' = {
-  name: automationAccountName
+  name: automationAccountFullName
   location: location
   identity: {
     type: 'SystemAssigned'

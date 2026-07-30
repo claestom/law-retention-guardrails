@@ -16,7 +16,7 @@ variable "target_resource_group_name" {
 variable "automation_account_name" {
   type        = string
   default     = "aa-law-retention"
-  description = "Name of the Automation Account to create."
+  description = "Base name for the Automation Account. A deterministic suffix derived from the RG is appended, because the name must be unique per subscription (across resource groups)."
 }
 
 variable "runbook_name" {
