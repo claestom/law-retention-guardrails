@@ -31,6 +31,11 @@ Deploys the table-retention Automation runbook: an Automation Account (system-as
 
 ## 2. Deploy
 
+The Automation Account's resource group must already exist (Bicep references it). Create it first if needed:
+```powershell
+az group create -n <automation-rg> -l westeurope
+```
+
 ```powershell
 az deployment group create -g <automation-rg> -f main.bicep -p main.bicepparam `
   -p runbookContentUri='https://raw.githubusercontent.com/claestom/law-retention-guardrails/main/automation/runbooks/Invoke-LawTableRetention.ps1'

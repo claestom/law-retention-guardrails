@@ -27,6 +27,11 @@ cp terraform.tfvars.example terraform.tfvars   # then edit
 
 ## 2. Deploy
 
+The Automation Account's resource group must already exist (Terraform references it via a data source). Create it first if needed:
+```powershell
+az group create -n <automation-rg> -l westeurope
+```
+
 ```powershell
 terraform init
 terraform apply

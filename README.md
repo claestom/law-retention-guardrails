@@ -106,7 +106,12 @@ The default `-Scope` is `ResourceGroup`. To go wider, set `-Scope Subscription` 
 ./scripts/Set-LawTableRetention.ps1 -Scope ManagementGroup -ManagementGroupName <mg-id>
 ```
 
-Or run it on a schedule via an **Automation runbook** - each guide has the full parameter list:
+Or run it on a schedule via an **Automation runbook** - each guide has the full parameter list.
+
+Both tools expect the Automation Account's resource group to **already exist** (they reference it, they don't create it). Create it first if needed:
+```powershell
+az group create -n <automation-rg> -l westeurope
+```
 
 **Bicep** ([full guide](automation/bicep/README.md))
 ```powershell
