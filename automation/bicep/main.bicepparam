@@ -33,7 +33,9 @@ param managementGroupName = ''
 param createRgRoleAssignment = false
 
 // ---- Runbook content -------------------------------------------------------
-// Leave empty to create an EMPTY runbook, then upload content after deployment
-// (see the az/PowerShell commands in the deploy notes). Set a raw Git/SAS blob URL
-// only if the .ps1 is reachable at deploy time.
+// Bicep can't embed a local .ps1, so the content must come from a URL. The README
+// passes this on the command line (-p runbookContentUri='<raw URL>'), which
+// overrides the empty default below AND creates the weekly schedule. Leave empty
+// only if you'd rather create an empty runbook and upload the script afterward
+// (e.g. private repo / URL not reachable at deploy time).
 param runbookContentUri = ''
