@@ -31,6 +31,15 @@ param(
     # Optional: deploy to a management group instead of a subscription.
     [string] $ManagementGroupId,
 
+    # Optional: assign at a single resource group (within -SubscriptionId) instead of the whole subscription.
+    [string] $ResourceGroupName,
+
+    # Optional: assign at an explicit scope id - a resource group or an individual resource
+    # (e.g. a specific Log Analytics workspace resource id). Overrides -ResourceGroupName / -ManagementGroupId
+    # for the assignment, role grant and remediation. The definitions/initiative are still created at the
+    # subscription (or management group) that contains the scope.
+    [string] $Scope,
+
     # Region for the assignment's managed identity (DeployIfNotExists requires a location).
     [string] $Location = "westeurope",
 
@@ -89,6 +98,20 @@ if (-not $useMg) {
     Write-Host "Deploying to management group $ManagementGroupId" -ForegroundColor Cyan
     $scopeArgs   = @("--management-group", $ManagementGroupId)
     $assignScope = "/providers/Microsoft.Management/managementGroups/$ManagementGroupId"
+}
+
+# Narrow the assignment scope to a resource group or an individual resource, if requested.
+# (Definitions/initiative still live at the subscription/management group above.)
+$assignRgName = $null
+if (-not [string]::IsNullOrWhiteSpace($Scope)) {
+    $assignScope = $Scope
+    if ($Scope -match '/resourceGroups/([^/]+)') { $assignRgName = $Matches[1] }
+    Write-Host "Assignment scope (explicit): $assignScope" -ForegroundColor Cyan
+} elseif (-not [string]::IsNullOrWhiteSpace($ResourceGroupName)) {
+    if ($useMg) { throw "Use -SubscriptionId (not -ManagementGroupId) together with -ResourceGroupName." }
+    $assignScope  = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName"
+    $assignRgName = $ResourceGroupName
+    Write-Host "Assignment scope (resource group): $assignScope" -ForegroundColor Cyan
 }
 
 # ---- Helper: write a JSON blob to a temp file and return an az '@file' arg ---
@@ -219,7 +242,13 @@ try {
     # ---- 6) Remediation tasks (existing resources) ------------------------
     Write-Host ""
     Write-Host "Starting remediation tasks for existing workspaces and tables" -ForegroundColor Green
-    $remScope = if ($useMg) { @("--management-group", $ManagementGroupId) } else { @() }
+    if ($assignRgName) {
+        $remScope = @("--resource-group", $assignRgName)
+    } elseif ($useMg) {
+        $remScope = @("--management-group", $ManagementGroupId)
+    } else {
+        $remScope = @()
+    }
     foreach ($ref in @("configureLawWorkspaceRetention", "configureLawTableRetention")) {
         $remName = "remediate-$ref-$((Get-Date).ToString('yyyyMMddHHmmss'))"
         az policy remediation create `

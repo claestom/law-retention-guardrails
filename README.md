@@ -79,9 +79,22 @@ Other switches:
 | Parameter | Purpose |
 |---|---|
 | `-ManagementGroupId <mgId>` | deploy + assign at management-group scope instead of a subscription |
+| `-ResourceGroupName <rg>` | assign at a single **resource group** (within `-SubscriptionId`) instead of the whole subscription |
+| `-Scope <resourceId>` | assign at an explicit scope - a resource group or an **individual resource** (e.g. one Log Analytics workspace). Overrides the above for the assignment, role grant and remediation |
 | `-Location <region>` | region for the assignment's managed identity (default `westeurope`) |
 | `-AssignmentName <name>` | assignment name (default `law-data-retention`) |
 | `-SkipAssignment` | only (re)create the definitions and initiative; assign and remediate yourself later |
+
+The policy **definitions and initiative** are always created at the subscription (or management group); only the **assignment** (plus its managed-identity role grant and remediation) is narrowed to the resource group or resource. Examples:
+
+```powershell
+# Assign to a single resource group
+./deploy.ps1 -SubscriptionId <sub> -ResourceGroupName rg-monitoring
+
+# Assign to a single Log Analytics workspace
+./deploy.ps1 -SubscriptionId <sub> `
+  -Scope /subscriptions/<sub>/resourceGroups/rg-monitoring/providers/Microsoft.OperationalInsights/workspaces/law-prod
+```
 
 Track remediation in the portal under **Policy → Remediation**, or:
 
@@ -96,6 +109,7 @@ az policy remediation list -o table
    - `policyDefinitions/configure-law-table-retention/azurepolicy.portal.json`
 2. (Optional) Create an **initiative** from `policySetDefinitions/configure-law-data-retention/azurepolicy.json` referencing the two definitions.
 3. **Assign** the definitions/initiative. On the assignment:
+   - choose the **scope** - a management group, subscription, **resource group**, or an **individual resource** (e.g. one workspace),
    - set the **effect** to `DeployIfNotExists` and the retention values,
    - enable a **system-assigned managed identity** and a **location**,
    - grant it **Log Analytics Contributor** at the scope (the portal offers to do this).
