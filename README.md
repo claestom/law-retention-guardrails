@@ -4,6 +4,16 @@ Govern **Log Analytics data retention** - at the **workspace** level and per **t
 
 > ⚠️ **Configure `deploy.ps1` first - it ships with the author's lab values.** The default **subscription id** inside `deploy.ps1` points at a demo environment - **replace it (or pass `-SubscriptionId <your-sub>`) before deploying**, or the command will target the wrong subscription.
 
+## Deploy with one click
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fclaestom%2Flaw-retention-guardrails%2Fmain%2Fazuredeploy.json)
+
+The button opens a **subscription-scoped** deployment of [`azuredeploy.json`](azuredeploy.json): pick the subscription and region, adjust the retention values, and deploy. It creates the two policy definitions, the initiative, the **assignment (with a managed identity)**, and the **Log Analytics Contributor** role assignment - so new and updated workspaces/tables are configured automatically.
+
+> You need permission to create policy and **role** assignments at the subscription (e.g. **Owner**). To fix **existing** resources after deploying, create a remediation task under **Policy → Remediation** (or run `deploy.ps1`, which starts them for you).
+
+Prefer scripts or the portal instead? Continue below.
+
 ## How it works
 
 Two custom policy definitions, grouped into one initiative:

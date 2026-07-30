@@ -1,0 +1,435 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/subscriptionDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "description": "Deploys the Log Analytics Retention Guardrails at subscription scope: two DeployIfNotExists policy definitions (workspace + table retention), an initiative, an assignment with a system-assigned managed identity, and a Log Analytics Contributor role assignment for that identity. New and updated workspaces/tables are configured automatically. To fix EXISTING resources, create a remediation task afterwards (Policy -> Remediation)."
+  },
+  "parameters": {
+    "assignmentName": {
+      "type": "string",
+      "defaultValue": "law-data-retention",
+      "metadata": {
+        "description": "Name of the policy assignment."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[deployment().location]",
+      "metadata": {
+        "description": "Region for the assignment's managed identity (DeployIfNotExists requires a location)."
+      }
+    },
+    "effect": {
+      "type": "string",
+      "allowedValues": [
+        "DeployIfNotExists",
+        "AuditIfNotExists",
+        "Disabled"
+      ],
+      "defaultValue": "DeployIfNotExists",
+      "metadata": {
+        "description": "Effect for both member policies. DeployIfNotExists remediates, AuditIfNotExists only reports, Disabled turns them off."
+      }
+    },
+    "workspaceRetentionInDays": {
+      "type": "int",
+      "defaultValue": 30,
+      "metadata": {
+        "description": "Workspace default analytics retention in days (30-730)."
+      }
+    },
+    "tableRetentionInDays": {
+      "type": "int",
+      "defaultValue": 30,
+      "metadata": {
+        "description": "Per-table analytics (interactive) retention in days (4-730)."
+      }
+    },
+    "tableTotalRetentionInDays": {
+      "type": "int",
+      "defaultValue": 730,
+      "metadata": {
+        "description": "Per-table total retention in days (4-730, or 1095, 1460, 1826, 2191, 2556, 2922, 3288, 3653, 4018, 4383)."
+      }
+    }
+  },
+  "variables": {
+    "workspaceDefinitionName": "configure-law-workspace-retention",
+    "tableDefinitionName": "configure-law-table-retention",
+    "initiativeName": "configure-law-data-retention",
+    "laContributorRoleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '92aaf0da-9dab-42b6-94a3-d43ce8d16293')]",
+    "roleAssignmentName": "[guid(subscription().id, variables('initiativeName'), 'la-contributor')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Authorization/policyDefinitions",
+      "apiVersion": "2021-06-01",
+      "name": "[variables('workspaceDefinitionName')]",
+      "properties": {
+        "policyType": "Custom",
+        "mode": "Indexed",
+        "displayName": "Configure Log Analytics workspace data retention (workspace level)",
+        "description": "Configures the workspace-level analytics data retention (retentionInDays) of Log Analytics workspaces to the number of days you specify, using DeployIfNotExists. Requires a managed identity with the Log Analytics Contributor role at the assignment scope.",
+        "metadata": {
+          "category": "Monitoring",
+          "version": "2.0.0",
+          "source": "https://learn.microsoft.com/azure/azure-monitor/logs/data-retention-configure"
+        },
+        "parameters": {
+          "effect": {
+            "type": "String",
+            "metadata": {
+              "displayName": "Effect",
+              "description": "The policy effect. DeployIfNotExists remediates non-compliant workspaces, AuditIfNotExists only reports them, Disabled turns the policy off."
+            },
+            "allowedValues": [
+              "DeployIfNotExists",
+              "AuditIfNotExists",
+              "Disabled"
+            ],
+            "defaultValue": "DeployIfNotExists"
+          },
+          "workspaceRetentionInDays": {
+            "type": "Integer",
+            "metadata": {
+              "displayName": "Workspace retention (days)",
+              "description": "Workspace-level analytics data retention in days. Allowed range is 30-730. Defaults to 30 (the minimum)."
+            },
+            "defaultValue": 30
+          }
+        },
+        "policyRule": {
+          "if": {
+            "field": "type",
+            "equals": "Microsoft.OperationalInsights/workspaces"
+          },
+          "then": {
+            "effect": "[[parameters('effect')]",
+            "details": {
+              "type": "Microsoft.OperationalInsights/workspaces",
+              "name": "[[field('name')]",
+              "roleDefinitionIds": [
+                "/providers/Microsoft.Authorization/roleDefinitions/92aaf0da-9dab-42b6-94a3-d43ce8d16293"
+              ],
+              "existenceCondition": {
+                "field": "Microsoft.OperationalInsights/workspaces/retentionInDays",
+                "equals": "[[parameters('workspaceRetentionInDays')]"
+              },
+              "deployment": {
+                "properties": {
+                  "mode": "incremental",
+                  "parameters": {
+                    "workspaceName": {
+                      "value": "[[field('name')]"
+                    },
+                    "location": {
+                      "value": "[[field('location')]"
+                    },
+                    "retentionInDays": {
+                      "value": "[[parameters('workspaceRetentionInDays')]"
+                    }
+                  },
+                  "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                      "workspaceName": {
+                        "type": "string"
+                      },
+                      "location": {
+                        "type": "string"
+                      },
+                      "retentionInDays": {
+                        "type": "int"
+                      }
+                    },
+                    "resources": [
+                      {
+                        "type": "Microsoft.OperationalInsights/workspaces",
+                        "apiVersion": "2022-10-01",
+                        "name": "[[parameters('workspaceName')]",
+                        "location": "[[parameters('location')]",
+                        "properties": {
+                          "retentionInDays": "[[parameters('retentionInDays')]"
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/policyDefinitions",
+      "apiVersion": "2021-06-01",
+      "name": "[variables('tableDefinitionName')]",
+      "properties": {
+        "policyType": "Custom",
+        "mode": "All",
+        "displayName": "Configure Log Analytics table data retention (analytics and total retention)",
+        "description": "Configures analytics (retentionInDays) and total (totalRetentionInDays) retention of individual tables in Log Analytics workspaces, using DeployIfNotExists. Basic/Auxiliary plan tables have a fixed analytics retention and will keep reporting non-compliant - exempt them if the noise is unwanted. Requires a managed identity with the Log Analytics Contributor role at the assignment scope.",
+        "metadata": {
+          "category": "Monitoring",
+          "version": "2.0.0",
+          "source": "https://learn.microsoft.com/azure/azure-monitor/logs/data-retention-configure"
+        },
+        "parameters": {
+          "effect": {
+            "type": "String",
+            "metadata": {
+              "displayName": "Effect",
+              "description": "The policy effect. DeployIfNotExists remediates non-compliant tables, AuditIfNotExists only reports them, Disabled turns the policy off."
+            },
+            "allowedValues": [
+              "DeployIfNotExists",
+              "AuditIfNotExists",
+              "Disabled"
+            ],
+            "defaultValue": "DeployIfNotExists"
+          },
+          "tableRetentionInDays": {
+            "type": "Integer",
+            "metadata": {
+              "displayName": "Table analytics retention (days)",
+              "description": "Analytics (interactive) retention in days for each table. Allowed range is 4-730. Defaults to 30."
+            },
+            "defaultValue": 30
+          },
+          "tableTotalRetentionInDays": {
+            "type": "Integer",
+            "metadata": {
+              "displayName": "Table total retention (days)",
+              "description": "Total retention in days (analytics + long-term) for each table. Valid values are 4-730, or 1095, 1460, 1826, 2191, 2556, 2922, 3288, 3653, 4018, 4383. Defaults to 30."
+            },
+            "defaultValue": 30
+          }
+        },
+        "policyRule": {
+          "if": {
+            "field": "type",
+            "equals": "Microsoft.OperationalInsights/workspaces/tables"
+          },
+          "then": {
+            "effect": "[[parameters('effect')]",
+            "details": {
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "name": "[[field('fullName')]",
+              "roleDefinitionIds": [
+                "/providers/Microsoft.Authorization/roleDefinitions/92aaf0da-9dab-42b6-94a3-d43ce8d16293"
+              ],
+              "existenceCondition": {
+                "allOf": [
+                  {
+                    "field": "Microsoft.OperationalInsights/workspaces/tables/retentionInDays",
+                    "equals": "[[parameters('tableRetentionInDays')]"
+                  },
+                  {
+                    "field": "Microsoft.OperationalInsights/workspaces/tables/totalRetentionInDays",
+                    "equals": "[[parameters('tableTotalRetentionInDays')]"
+                  }
+                ]
+              },
+              "deployment": {
+                "properties": {
+                  "mode": "incremental",
+                  "parameters": {
+                    "tableFullName": {
+                      "value": "[[field('fullName')]"
+                    },
+                    "retentionInDays": {
+                      "value": "[[parameters('tableRetentionInDays')]"
+                    },
+                    "totalRetentionInDays": {
+                      "value": "[[parameters('tableTotalRetentionInDays')]"
+                    }
+                  },
+                  "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                      "tableFullName": {
+                        "type": "string"
+                      },
+                      "retentionInDays": {
+                        "type": "int"
+                      },
+                      "totalRetentionInDays": {
+                        "type": "int"
+                      }
+                    },
+                    "resources": [
+                      {
+                        "type": "Microsoft.OperationalInsights/workspaces/tables",
+                        "apiVersion": "2022-10-01",
+                        "name": "[[parameters('tableFullName')]",
+                        "properties": {
+                          "retentionInDays": "[[parameters('retentionInDays')]",
+                          "totalRetentionInDays": "[[parameters('totalRetentionInDays')]"
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/policySetDefinitions",
+      "apiVersion": "2021-06-01",
+      "name": "[variables('initiativeName')]",
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', variables('workspaceDefinitionName'))]",
+        "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', variables('tableDefinitionName'))]"
+      ],
+      "properties": {
+        "policyType": "Custom",
+        "displayName": "Configure Log Analytics data retention (workspace and table level)",
+        "description": "Initiative that configures data retention for Log Analytics workspaces at both the workspace level and the individual table level, using DeployIfNotExists. Requires a managed identity with the Log Analytics Contributor role at the assignment scope.",
+        "metadata": {
+          "category": "Monitoring",
+          "version": "2.0.0",
+          "source": "https://learn.microsoft.com/azure/azure-monitor/logs/data-retention-configure"
+        },
+        "parameters": {
+          "effect": {
+            "type": "String",
+            "metadata": {
+              "displayName": "Effect",
+              "description": "The effect applied by both member policies."
+            },
+            "allowedValues": [
+              "DeployIfNotExists",
+              "AuditIfNotExists",
+              "Disabled"
+            ],
+            "defaultValue": "DeployIfNotExists"
+          },
+          "workspaceRetentionInDays": {
+            "type": "Integer",
+            "metadata": {
+              "displayName": "Workspace retention (days)",
+              "description": "Workspace-level analytics data retention in days. Allowed range is 30-730."
+            },
+            "defaultValue": 30
+          },
+          "tableRetentionInDays": {
+            "type": "Integer",
+            "metadata": {
+              "displayName": "Table analytics retention (days)",
+              "description": "Analytics retention in days for each table. Allowed range is 4-730."
+            },
+            "defaultValue": 30
+          },
+          "tableTotalRetentionInDays": {
+            "type": "Integer",
+            "metadata": {
+              "displayName": "Table total retention (days)",
+              "description": "Total retention in days (analytics + long-term) for each table."
+            },
+            "defaultValue": 730
+          }
+        },
+        "policyDefinitionGroups": [
+          {
+            "name": "workspace-retention",
+            "displayName": "Workspace-level data retention"
+          },
+          {
+            "name": "table-retention",
+            "displayName": "Table-level data retention"
+          }
+        ],
+        "policyDefinitions": [
+          {
+            "policyDefinitionReferenceId": "configureLawWorkspaceRetention",
+            "policyDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', variables('workspaceDefinitionName'))]",
+            "groupNames": [
+              "workspace-retention"
+            ],
+            "parameters": {
+              "effect": {
+                "value": "[[parameters('effect')]"
+              },
+              "workspaceRetentionInDays": {
+                "value": "[[parameters('workspaceRetentionInDays')]"
+              }
+            }
+          },
+          {
+            "policyDefinitionReferenceId": "configureLawTableRetention",
+            "policyDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', variables('tableDefinitionName'))]",
+            "groupNames": [
+              "table-retention"
+            ],
+            "parameters": {
+              "effect": {
+                "value": "[[parameters('effect')]"
+              },
+              "tableRetentionInDays": {
+                "value": "[[parameters('tableRetentionInDays')]"
+              },
+              "tableTotalRetentionInDays": {
+                "value": "[[parameters('tableTotalRetentionInDays')]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/policyAssignments",
+      "apiVersion": "2022-06-01",
+      "name": "[parameters('assignmentName')]",
+      "location": "[parameters('location')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Authorization/policySetDefinitions', variables('initiativeName'))]"
+      ],
+      "properties": {
+        "displayName": "Configure Log Analytics data retention",
+        "policyDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/policySetDefinitions', variables('initiativeName'))]",
+        "parameters": {
+          "effect": {
+            "value": "[parameters('effect')]"
+          },
+          "workspaceRetentionInDays": {
+            "value": "[parameters('workspaceRetentionInDays')]"
+          },
+          "tableRetentionInDays": {
+            "value": "[parameters('tableRetentionInDays')]"
+          },
+          "tableTotalRetentionInDays": {
+            "value": "[parameters('tableTotalRetentionInDays')]"
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[variables('roleAssignmentName')]",
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Authorization/policyAssignments', parameters('assignmentName'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[variables('laContributorRoleDefinitionId')]",
+        "principalId": "[reference(subscriptionResourceId('Microsoft.Authorization/policyAssignments', parameters('assignmentName')), '2022-06-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      }
+    }
+  ],
+  "outputs": {
+    "assignmentPrincipalId": {
+      "type": "string",
+      "value": "[reference(subscriptionResourceId('Microsoft.Authorization/policyAssignments', parameters('assignmentName')), '2022-06-01', 'full').identity.principalId]"
+    }
+  }
+}
