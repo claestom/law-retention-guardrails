@@ -108,18 +108,19 @@ The default `-Scope` is `ResourceGroup`. To go wider, set `-Scope Subscription` 
 
 Or run it on a schedule via an **Automation runbook** - each guide has the full parameter list.
 
-Both tools expect the Automation Account's resource group to **already exist** (they reference it, they don't create it). Create it first if needed:
+Both tools expect the Automation Account's resource group to **already exist** (they reference it, they don't create it). Set the name once and reuse it - create the RG if needed:
 ```powershell
-az group create -n <automation-rg> -l westeurope
+$automationRg = "rg-automation"
+az group create -n $automationRg -l westeurope
 ```
 
 **Bicep** ([full guide](automation/bicep/README.md))
 ```powershell
-az deployment group create -g <automation-rg> -f automation/bicep/main.bicep -p automation/bicep/main.bicepparam `
+az deployment group create -g $automationRg -f automation/bicep/main.bicep -p automation/bicep/main.bicepparam `
   -p runbookContentUri='https://raw.githubusercontent.com/claestom/law-retention-guardrails/main/automation/runbooks/Invoke-LawTableRetention.ps1'
 ```
 
-**Terraform** ([full guide](automation/terraform/README.md))
+**Terraform** ([full guide](automation/terraform/README.md)) - set the same RG in `automation_resource_group_name` in your tfvars:
 ```powershell
 cd automation/terraform; cp terraform.tfvars.example terraform.tfvars   # edit values
 terraform init; terraform apply
