@@ -51,6 +51,20 @@
       "metadata": {
         "description": "Per-table total retention in days (4-730, or 1095, 1460, 1826, 2191, 2556, 2922, 3288, 3653, 4018, 4383)."
       }
+    },
+    "tableNameLike": {
+      "type": "string",
+      "defaultValue": "*",
+      "metadata": {
+        "description": "Only tables whose name matches this wildcard pattern are governed. '*' = all tables, 'App*' = Application Insights tables, '*_CL' = custom-log tables."
+      }
+    },
+    "tableNameNotLike": {
+      "type": "string",
+      "defaultValue": "~noexclude~",
+      "metadata": {
+        "description": "Tables whose name matches this wildcard pattern are skipped (e.g. 'App*' to exclude Application Insights tables). Default matches nothing (exclude none)."
+      }
     }
   },
   "variables": {
@@ -458,6 +472,12 @@
           },
           "tableTotalRetentionInDays": {
             "value": "[parameters('tableTotalRetentionInDays')]"
+          },
+          "tableNameLike": {
+            "value": "[parameters('tableNameLike')]"
+          },
+          "tableNameNotLike": {
+            "value": "[parameters('tableNameNotLike')]"
           }
         }
       }
