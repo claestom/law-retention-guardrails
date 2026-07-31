@@ -22,3 +22,6 @@ scripts/Set-LawTableRetention.Sequential.ps1
 
 # Draft Tech Community article (kept out of the repo)
 article-techcommunity.md
+
+# Local-only images / screenshots (kept out of the repo)
+images/
