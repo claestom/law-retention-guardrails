@@ -61,6 +61,22 @@
         {
           "field": "name",
           "notLike": "[parameters('tableNameNotLike')]"
+        },
+        {
+          "field": "name",
+          "notIn": [
+            "AppAvailabilityResults",
+            "AppBrowserTimings",
+            "AppDependencies",
+            "AppEvents",
+            "AppExceptions",
+            "AppMetrics",
+            "AppPageViews",
+            "AppPerformanceCounters",
+            "AppRequests",
+            "AppSystemEvents",
+            "AppTraces"
+          ]
         }
       ]
     },

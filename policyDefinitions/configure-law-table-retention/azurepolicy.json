@@ -5,7 +5,7 @@
     "displayName": "Configure Log Analytics table data retention (analytics and total retention)",
     "policyType": "Custom",
     "mode": "All",
-    "description": "Configures analytics (retentionInDays) and total (totalRetentionInDays) retention of individual tables in Log Analytics workspaces, using DeployIfNotExists. Use tableNameLike/tableNameNotLike to filter which tables are governed. Create a remediation task to fix existing tables. Requires a managed identity with the Log Analytics Contributor role. Basic/Auxiliary tables have fixed retention and always report non-compliant.",
+    "description": "Configures analytics (retentionInDays) and total (totalRetentionInDays) retention of tables in Log Analytics workspaces via DeployIfNotExists. Application Insights (App*) tables are always excluded; use the dedicated App Insights policy for them. Use tableNameLike/tableNameNotLike for further filtering, and create a remediation task to fix existing tables. Requires a managed identity with the Log Analytics Contributor role. Basic/Auxiliary tables have fixed retention and always report non-compliant.",
     "metadata": {
       "category": "Monitoring",
       "version": "2.0.0",
@@ -72,6 +72,22 @@
           {
             "field": "name",
             "notLike": "[parameters('tableNameNotLike')]"
+          },
+          {
+            "field": "name",
+            "notIn": [
+              "AppAvailabilityResults",
+              "AppBrowserTimings",
+              "AppDependencies",
+              "AppEvents",
+              "AppExceptions",
+              "AppMetrics",
+              "AppPageViews",
+              "AppPerformanceCounters",
+              "AppRequests",
+              "AppSystemEvents",
+              "AppTraces"
+            ]
           }
         ]
       },
