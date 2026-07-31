@@ -1,21 +1,22 @@
 <#
 .SYNOPSIS
     Deploys the "Configure Log Analytics data retention" initiative (DeployIfNotExists)
-    and its two member policy definitions, assigns it with a managed identity, grants the
+    and its three member policy definitions, assigns it with a managed identity, grants the
     required role, and starts remediation tasks for existing workspaces and tables.
 
 .DESCRIPTION
     Creates/updates, then assigns and remediates:
-      1. Policy definition       : configure-law-workspace-retention  (DeployIfNotExists)
-      2. Policy definition       : configure-law-table-retention      (DeployIfNotExists)
-      3. Policy set (initiative) : configure-law-data-retention       (references the two above)
-      4. Policy assignment       : with a system-assigned managed identity
-      5. Role assignment         : Log Analytics Contributor for that identity, at the scope
-      6. Remediation tasks       : one per member definition, to fix existing resources
+      1. Policy definition       : configure-law-workspace-retention     (DeployIfNotExists)
+      2. Policy definition       : configure-law-table-retention         (DeployIfNotExists)
+      3. Policy definition       : configure-appinsights-table-retention (DeployIfNotExists)
+      4. Policy set (initiative) : configure-law-data-retention          (references the three above)
+      5. Policy assignment       : with a system-assigned managed identity
+      6. Role assignment         : Log Analytics Contributor for that identity, at the scope
+      7. Remediation tasks       : one per member definition, to fix existing resources
 
     The initiative JSON ships with placeholder policyDefinitionId tokens
-    (__WORKSPACE_DEF_ID__ / __TABLE_DEF_ID__). This script substitutes the real
-    resource IDs of the definitions it just created before creating the initiative.
+    (__WORKSPACE_DEF_ID__ / __TABLE_DEF_ID__ / __APPINSIGHTS_DEF_ID__). This script substitutes the
+    real resource IDs of the definitions it just created before creating the initiative.
 
 .NOTES
     Includes a subscription guardrail: the script refuses to run against the
@@ -51,6 +52,10 @@ param(
     [int] $TableRetentionInDays      = 30,
     [int] $TableTotalRetentionInDays = 730,
 
+    # Retention values for the Application Insights (App*) tables. Default to the free 90 days.
+    [int] $AppInsightsRetentionInDays      = 90,
+    [int] $AppInsightsTotalRetentionInDays = 90,
+
     # Table-name filter for this assignment (wildcard 'like' patterns). Defaults govern all tables.
     # Example: baseline uses -TableNameNotLike 'App*'; an App Insights overlay uses -TableNameLike 'App*'.
     [string] $TableNameLike    = "*",
@@ -77,9 +82,10 @@ $laContributorRoleId = "92aaf0da-9dab-42b6-94a3-d43ce8d16293"  # Log Analytics C
 $repoRoot   = Split-Path -Parent $MyInvocation.MyCommand.Path
 $wsDefFile  = Join-Path $repoRoot "policyDefinitions/configure-law-workspace-retention/azurepolicy.json"
 $tblDefFile = Join-Path $repoRoot "policyDefinitions/configure-law-table-retention/azurepolicy.json"
+$aiDefFile  = Join-Path $repoRoot "policyDefinitions/configure-appinsights-table-retention/azurepolicy.json"
 $setFile    = Join-Path $repoRoot "policySetDefinitions/configure-law-data-retention/azurepolicy.json"
 
-foreach ($f in @($wsDefFile, $tblDefFile, $setFile)) {
+foreach ($f in @($wsDefFile, $tblDefFile, $aiDefFile, $setFile)) {
     if (-not (Test-Path $f)) { throw "File not found: $f" }
 }
 
@@ -156,18 +162,35 @@ try {
         --params  (New-JsonArg $tblJson.properties.parameters) `
         @scopeArgs | Out-Null
 
+    # ---- 2b) Application Insights table policy definition ------------------
+    $aiName = "configure-appinsights-table-retention"
+    Write-Host "Creating/updating policy definition: $aiName" -ForegroundColor Green
+    $aiJson = Get-Content $aiDefFile -Raw | ConvertFrom-Json
+    az policy definition create `
+        --name $aiName `
+        --display-name $aiJson.properties.displayName `
+        --description  $aiJson.properties.description `
+        --mode         $aiJson.properties.mode `
+        --metadata     "category=Monitoring" `
+        --rules   (New-JsonArg $aiJson.properties.policyRule) `
+        --params  (New-JsonArg $aiJson.properties.parameters) `
+        @scopeArgs | Out-Null
+
     # ---- Resolve the definition resource IDs ------------------------------
     $wsDefId  = az policy definition show --name $wsName  @scopeArgs --query id -o tsv
     $tblDefId = az policy definition show --name $tblName @scopeArgs --query id -o tsv
-    Write-Host "Workspace definition id: $wsDefId"
-    Write-Host "Table definition id    : $tblDefId"
+    $aiDefId  = az policy definition show --name $aiName  @scopeArgs --query id -o tsv
+    Write-Host "Workspace definition id      : $wsDefId"
+    Write-Host "Table definition id          : $tblDefId"
+    Write-Host "App Insights definition id   : $aiDefId"
 
     # ---- 3) Initiative (policy set definition) ----------------------------
     $setName = "configure-law-data-retention"
     Write-Host "Creating/updating initiative: $setName" -ForegroundColor Green
     $setRaw = (Get-Content $setFile -Raw) `
-        -replace "__WORKSPACE_DEF_ID__", $wsDefId `
-        -replace "__TABLE_DEF_ID__",     $tblDefId
+        -replace "__WORKSPACE_DEF_ID__",   $wsDefId `
+        -replace "__TABLE_DEF_ID__",       $tblDefId `
+        -replace "__APPINSIGHTS_DEF_ID__", $aiDefId
     $setJson = $setRaw | ConvertFrom-Json
 
     $setArgs = @(
@@ -196,12 +219,14 @@ try {
     Write-Host ""
     Write-Host "Creating/updating assignment: $AssignmentName" -ForegroundColor Green
     $assignParams = [ordered]@{
-        effect                    = @{ value = "DeployIfNotExists" }
-        workspaceRetentionInDays  = @{ value = $WorkspaceRetentionInDays }
-        tableRetentionInDays      = @{ value = $TableRetentionInDays }
-        tableTotalRetentionInDays = @{ value = $TableTotalRetentionInDays }
-        tableNameLike             = @{ value = $TableNameLike }
-        tableNameNotLike          = @{ value = $TableNameNotLike }
+        effect                          = @{ value = "DeployIfNotExists" }
+        workspaceRetentionInDays        = @{ value = $WorkspaceRetentionInDays }
+        tableRetentionInDays            = @{ value = $TableRetentionInDays }
+        tableTotalRetentionInDays       = @{ value = $TableTotalRetentionInDays }
+        tableNameLike                   = @{ value = $TableNameLike }
+        tableNameNotLike                = @{ value = $TableNameNotLike }
+        appInsightsRetentionInDays      = @{ value = $AppInsightsRetentionInDays }
+        appInsightsTotalRetentionInDays = @{ value = $AppInsightsTotalRetentionInDays }
     }
     $notScopesArgs = @()
     if ($NotScopes -and $NotScopes.Count -gt 0) { $notScopesArgs = @("--not-scopes") + $NotScopes }
@@ -263,7 +288,7 @@ try {
         $canRemediate = $false
     }
     if ($canRemediate) {
-        foreach ($ref in @("configureLawWorkspaceRetention", "configureLawTableRetention")) {
+        foreach ($ref in @("configureLawWorkspaceRetention", "configureLawTableRetention", "configureAppInsightsTableRetention")) {
             $remName = "remediate-$ref-$((Get-Date).ToString('yyyyMMddHHmmss'))"
             az policy remediation create `
                 --name $remName `
